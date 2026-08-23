@@ -4,11 +4,12 @@ Headless generative art: NO browser on VPS. Validate algorithm in Python (math.s
 §
 Кастомные скиллы хранятся только в skills/tigor/. Всё остальное в skills/ — бандловое или чужое, не трекать в git. Все новые скиллы создавать в skills/tigor/.
 §
-NEVER push to GitHub without explicit request — EXCEPTION: tigor-ai pushes directly to `github-pull-and-push-to-main main` (normal workflow). If unsure → push Forgejo. tigor-no-ai: branch→push `github-push-to-feature-branch`→PR to `github-pull/main`.
+tigor-ai: push directly to `github-pull-and-push-to-main main` — this is normal workflow. Forgejo (`forgejo-push-for-preview`) — isolated mirror, creds from secrets/forgejo.conf.
+tigor-no-ai: branch→push `github-push-to-feature-branch`→PR to `github-pull/main`.
 
 Repos at /opt/git/ (HTTPS clones, semantic remotes). Worktrees at /opt/git/tigor-*.worktrees/. .hermes in tigor-ai/.hermes/ mounted to /opt/data.
 `hermes-refresh.sh` in tigor-ai root: clean reclone + remotes. PAT via credential.helper from /opt/data/.env.
-Forgejo creds in /opt/data/secrets/forgejo.conf. Secrets that survive reinstall: .env, secrets/, auth.json.
+Keep commits clean — only target commits, no experiments in the repo. Secrets that survive reinstall: .env, secrets/, auth.json.
 §
 Hermes .hermes config in tigor-ai/.hermes/ on GitHub (enovikov11/tigor-ai:main). Forgejo mirror at forgejo-push-for-preview.
 §
