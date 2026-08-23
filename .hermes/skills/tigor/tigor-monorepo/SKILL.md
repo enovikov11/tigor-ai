@@ -238,7 +238,16 @@ When multiple changes modify the same file (e.g. README.md), parallel subagents 
    See `references/vm-infra.md` for full topology.
 3. **VM internet via container network (post-migration 2026-08).** Hermes runs inside a Podman container on the VM with direct internet access. No more passt/proxy/NAT needed. Neighboring services reachable via DNS: `vllm:8000`, `forgejo:3000`.
 4. **HTTPS auth via credential helper.** PAT from `/opt/data/.env` is auto-injected via git credential.helper (set by `hermes-refresh.sh`). `git push <remote> <branch>` works directly — no manual token-in-URL needed. If it fails with "could not read Username", check the credential helper: `git config --global credential.helper`.
-5. **PR creation for tigor-no-ai.** Push branch to `github-push-to-feature-branch`, then create PR via `curl` + PAT (`gh` not installed):
+5. **Forgejo push requires embedded credentials.** The `forgejo-push-for-preview` remote uses a plain HTTP URL without auth. If push fails, read creds from `/opt/data/secrets/forgejo.conf` and embed them:
+  ```bash
+  . /opt/data/secrets/forgejo.conf
+  git remote set-url forgejo-push-for-preview "http://${FORGEJO_USER}:${FORGEJO_PASS}@${FORGEJO_HOST}:${FORGEJO_PORT}/hermes/tigor-ai.git"
+  # Or use IP directly if DNS fails:
+  git remote set-url forgejo-push-for-preview "http://${FORGEJO_USER}:${FORGEJO_PASS}@10.67.69.2:${FORGEJO_PORT}/hermes/tigor-ai.git"
+  git push forgejo-push-for-preview <branch>
+  ```
+  This survives reclone — `hermes-refresh.sh` resets to unauthenticated URL for safety, so creds are added at push-time.
+6. **PR creation for tigor-no-ai.** Push branch to `github-push-to-feature-branch`, then create PR via `curl` + PAT (`gh` not installed):
    ```bash
    PAT=$(grep "^GITHUB_TOKEN=" /opt/data/.env | cut -d= -f2-)
    curl -s -X POST https://api.github.com/repos/enovikov11/tigor-no-ai/pulls \
@@ -264,24 +273,24 @@ When multiple changes modify the same file (e.g. README.md), parallel subagents 
    - If PR deleted a file the user wants to keep: `git checkout github-pull/main -- <file>`
    - Make changes, commit, push (credential helper handles HTTPS auth).
 
-6. **`git push --force-with-lease` "stale info" on worktrees.** Worktrees keep stale ref metadata. When push fails with "stale info", do:
+7. **`git push --force-with-lease` "stale info" on worktrees.** Worktrees keep stale ref metadata. When push fails with "stale info", do:
   ```bash
   git fetch <remote> <branch>
   git push <remote> HEAD:<branch> --force
   ```
   This refreshes the local tracking ref and forces the update. Do NOT retry `--force-with-lease` without fetching first — it will keep failing.
-7. **Python `.format()` eats bash `${VAR}` braces.** When generating shell scripts in Python, never use `.format()` on strings containing `${VAR}` — Python interprets `{VAR}` as a replacement field and raises `KeyError`. Use `+` string concatenation or a unique placeholder token (e.g. `$VARN$`) with `.replace()` instead.
-8. **Don't overwrite without `git mv` first.**
-9. **Never overwrite user-authored root README blocks.** Title line, `> **Note:**` blocks, and `See also` links must be preserved verbatim.
-10. **Sub-READMEs are NOT AI targets.** Files like `maker/0-t100-gpt/arduino/README.md`, `infra/0-box/power/README.md`, `ai/0-p-agent/ideas/README.md` are original and should not be modified or renamed.
-11. **Check actual repo structure.** The repo grows — don't assume projects from old sessions still exist in the same place. Always `find . -maxdepth 2 -mindepth 2 -type d` before generating.
-12. **infra/0-stateless lives in tigor-no-ai.** Don't touch it when working on tigor-ai.
-13. **Create domain-level READMEs.** Always generate `README.md` for each top-level directory (ai/, analytics/, games/, etc.) in addition to per-project READMEs.
-14. **One commit per project.** Never bundle unrelated projects in one commit.
-15. **Maintain DEAD.md.** Every deletion gets a line in DEAD.md with the commit SHA link.
-16. **Merge README changes into one branch** on the fresh main — don't push multiple readme-* feature branches.
-17. **NEVER squash-merge multi-project branches.** The user explicitly forbade this — use `git merge --no-ff`. BUT the repo enforces squash-only, so **always verify content actually landed** after squash (check files are gone, README is updated, etc.). Squash can silently preserve files if the merge base was wrong.
-18. **Case-insensitive filesystem collisions.** macOS (HFS+/APFS) cannot cohost `README.md` and `readme.md` — git clone fails with collision warnings, and one file is silently dropped. If a project has both, rename the lowercase variant (e.g. `readme.md` → `notes.md`) via `git mv` and push. Verify with `git ls-tree -r HEAD --name-only | grep -i readme` to find all collisions before pushing.
+8. **Python `.format()` eats bash `${VAR}` braces.** When generating shell scripts in Python, never use `.format()` on strings containing `${VAR}` — Python interprets `{VAR}` as a replacement field and raises `KeyError`. Use `+` string concatenation or a unique placeholder token (e.g. `$VARN$`) with `.replace()` instead.
+9. **Don't overwrite without `git mv` first.**
+10. **Never overwrite user-authored root README blocks.** Title line, `> **Note:**` blocks, and `See also` links must be preserved verbatim.
+11. **Sub-READMEs are NOT AI targets.** Files like `maker/0-t100-gpt/arduino/README.md`, `infra/0-box/power/README.md`, `ai/0-p-agent/ideas/README.md` are original and should not be modified or renamed.
+12. **Check actual repo structure.** The repo grows — don't assume projects from old sessions still exist in the same place. Always `find . -maxdepth 2 -mindepth 2 -type d` before generating.
+13. **infra/0-stateless lives in tigor-no-ai.** Don't touch it when working on tigor-ai.
+14. **Create domain-level READMEs.** Always generate `README.md` for each top-level directory (ai/, analytics/, games/, etc.) in addition to per-project READMEs.
+15. **One commit per project.** Never bundle unrelated projects in one commit.
+16. **Maintain DEAD.md.** Every deletion gets a line in DEAD.md with the commit SHA link.
+17. **Merge README changes into one branch** on the fresh main — don't push multiple readme-* feature branches.
+18. **NEVER squash-merge multi-project branches.** The user explicitly forbade this — use `git merge --no-ff`. BUT the repo enforces squash-only, so **always verify content actually landed** after squash (check files are gone, README is updated, etc.). Squash can silently preserve files if the merge base was wrong.
+19. **Case-insensitive filesystem collisions.** macOS (HFS+/APFS) cannot cohost `README.md` and `readme.md` — git clone fails with collision warnings, and one file is silently dropped. If a project has both, rename the lowercase variant (e.g. `readme.md` → `notes.md`) via `git mv` and push. Verify with `git ls-tree -r HEAD --name-only | grep -i readme` to find all collisions before pushing.
 
 ## Verification Checklist
 
