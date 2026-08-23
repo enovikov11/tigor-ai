@@ -79,6 +79,26 @@ PAT=$(grep "^GITHUB_TOKEN=" /opt/data/.env | cut -d= -f2-)
 
 Old references to `git config --global github.token` are stale — the PAT lives in `.env`.
 
+### Secrets that survive reclone/reinstall
+
+These live in `/opt/data/` (persistent container volume) and are NOT in the git repos:
+
+| File/Dir | Contains | Persists across? |
+|---|---|---|
+| `.env` | GitHub PAT (`GITHUB_TOKEN`) | Reclone, reinstall |
+| `secrets/forgejo.conf` | Forgejo admin creds (`FORGEJO_USER`, `FORGEJO_PASS`) | Reclone, reinstall |
+| `auth.json` | Hermes platform auth (Telegram, etc.) | Reclone, reinstall |
+
+`hermes-refresh.sh` destroys `~/hermes-git/` (the repos) but NOT `/opt/data/` — secrets survive.
+
+### Public repo rule
+
+**tigor-ai is public on GitHub.** Every commit must be inspected before push:
+- Check `.git status --short` — verify nothing unexpected is staged
+- Run `git diff --cached` — visually scan for secrets, keys, passwords
+- **NEVER change `.gitignore`** without a clear, justified reason
+- If something secret leaks into a commit: `git reset HEAD~1`, fix, recommit
+
 ## Overview
 
 Evgenii's personal monorepo split into two repos:

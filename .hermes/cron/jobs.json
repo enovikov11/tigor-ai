@@ -46,7 +46,10 @@
         "terminal"
       ],
       "workdir": null,
-      "fire_claim": null,
+      "fire_claim": {
+        "at": "2026-08-23T20:59:38.976525+00:00",
+        "by": "823bf36816bd:146:5fa56182061849c199c952088d6ca495"
+      },
       "failure_streak": 0
     },
     {
@@ -100,5 +103,5 @@
       "workdir": null
     }
   ],
-  "updated_at": "2026-08-23T14:43:40.193975+00:00"
+  "updated_at": "2026-08-23T20:59:38.977789+00:00"
 }
