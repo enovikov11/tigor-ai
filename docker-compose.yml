@@ -45,14 +45,16 @@ services:
     image: docker.io/nousresearch/hermes-agent
     restart: unless-stopped
     volumes:
-      - /home/nixos/hermes-git/tigor-ai/.hermes:/opt/data
-      - /home/nixos/hermes-git:/opt/git
-      - /run/user/1000/podman/podman.sock:/run/user/1000/podman/podman.sock
+      - /home/nixos/tigor-ai/.hermes:/opt/data
+      - /home/nixos/tigor-ai:/home/nixos/tigor-ai
+      - /home/nixos/tigor-no-ai:/home/nixos/tigor-no-ai
+      - /home/nixos/.ssh:/home/nixos/.ssh:ro
     ports:
       - "9119:9119"
     environment:
       HERMES_DASHBOARD: "1"
-      DOCKER_HOST: "unix:///run/user/1000/podman/podman.sock"
+    extra_hosts:
+      - "host.containers.internal:host-gateway"
     command: ["gateway", "run"]
 
   caddy:
