@@ -3,7 +3,7 @@
     {
       "id": "f749e2f9af71",
       "name": "hermes-config daily push",
-      "prompt": "Execute the following commands to commit and push all changes in the hermes-config repository:\n\n```bash\ncd ~/.hermes\ngit add .\ngit commit -m \"auto: daily snapshot $(date +%Y-%m-%d)\" --allow-empty-message\ngit push forgejo\n```\n\nReport the output of each command. If git commit has no changes, that's fine — just report it. If push fails, report the error.",
+      "prompt": "Daily snapshot: commit and push .hermes changes in tigor-ai.\n\n```bash\ncd /opt/git/tigor-ai\ngit status --short\ngit add .hermes/\ngit commit -m \"auto: daily snapshot $(date +%Y-%m-%d)\" --allow-empty-message\n# Push to forgejo (with embedded creds from secrets)\n. /opt/data/secrets/forgejo.conf\ngit remote set-url forgejo-push-for-preview \"http://${FORGEJO_USER}:${FORGEJO_PASS}@10.67.69.2:${FORGEJO_PORT}/hermes/tigor-ai.git\"\ngit push forgejo-push-for-preview main\n```\n\nReport output of each command. If commit has no changes, that's fine — report it. If push fails, report the error.",
       "skills": [],
       "skill": null,
       "model": null,
@@ -103,5 +103,5 @@
       "workdir": null
     }
   ],
-  "updated_at": "2026-08-23T20:59:38.977789+00:00"
+  "updated_at": "2026-08-23T21:00:08.024427+00:00"
 }
