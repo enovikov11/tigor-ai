@@ -56,6 +56,7 @@ services:
     command: ["gateway", "run"]
 
   caddy:
+    container_name: caddy
     image: docker.io/library/caddy:2
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile
