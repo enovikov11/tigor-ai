@@ -14,19 +14,20 @@ metadata:
 
 ## Pre-flight: Worktree rule
 
-**Both repos are regular clones** (non-bare). Worktrees are created from them directly:
+**Both repos are regular clones** (non-bare). Worktrees are created from them directly.
+**`hermes-refresh.sh`** (root of tigor-ai) does a clean reclone with semantic remotes — run on host to reset everything.
 
 ```bash
-# tigor-ai
+# tigor-ai — pull from github-pull-and-push-to-main, worktree from its main
 cd /opt/git/tigor-ai
-git worktree add -b <branch> /opt/git/tigor-ai.worktrees/<name> origin/main
-# Edit → commit → push → PR (or direct push to main)
+git worktree add -b <branch> /opt/git/tigor-ai.worktrees/<name> github-pull-and-push-to-main/main
+# Edit → commit → push to github-pull-and-push-to-main main (or forgejo-push-for-preview for draft)
 git worktree remove /opt/git/tigor-ai.worktrees/<name>
 
-# tigor-no-ai
+# tigor-no-ai — pull from github-pull, push to github-push-to-feature-branch
 cd /opt/git/tigor-no-ai
-git worktree add -b <branch> /opt/git/tigor-no-ai.worktrees/<name> origin/main
-# Edit → commit → push to fork → PR to upstream
+git worktree add -b <branch> /opt/git/tigor-no-ai.worktrees/<name> github-pull/main
+# Edit → commit → push to github-push-to-feature-branch → PR to github-pull
 git worktree remove /opt/git/tigor-no-ai.worktrees/<name>
 ```
 
@@ -34,14 +35,9 @@ No `GIT_WORK_TREE` env var — both are standard clones.
 
 ## Pre-flight: PR target
 
-**tigor-no-ai PRs must target `enovikov11/tigor-no-ai` (upstream), NOT the agent fork.**
-Fork remote (`enovikov11-ai-agent/tigor-no-ai`) must be added before first PR:
-```bash
-cd /opt/git/tigor-no-ai
-git remote add fork https://github.com/enovikov11-ai-agent/tigor-no-ai.git
-```
+**tigor-no-ai PRs must target `github-pull` (`enovikov11/tigor-no-ai`), NOT the fork.**
+Branch is pushed to `github-push-to-feature-branch` (`enovikov11-ai-agent/tigor-no-ai`). PR creation via curl:
 
-PR creation via curl:
 ```bash
 PAT=$(grep "^GITHUB_TOKEN=" /opt/data/.env | cut -d= -f2-)
 curl -s -X POST https://api.github.com/repos/enovikov11/tigor-no-ai/pulls \
@@ -64,12 +60,13 @@ Both are regular HTTPS clones (non-bare). No bare repos — no `git archive` or 
 
 | Component | Location | Type |
 |---|---|---|
-| tigor-ai | `/opt/git/tigor-ai` | Regular clone, origin=GitHub, forgejo added |
-| tigor-no-ai | `/opt/git/tigor-no-ai` | Regular clone, origin=GitHub |
+| tigor-ai | `/opt/git/tigor-ai` | Regular clone, HTTPS |
+| tigor-no-ai | `/opt/git/tigor-no-ai` | Regular clone, HTTPS |
 | worktrees dirs | `/opt/git/tigor-ai.worktrees/` | Empty, ready |
 | worktrees dirs | `/opt/git/tigor-no-ai.worktrees/` | Empty, ready |
 | .hermes config | `/opt/data/` → `/opt/git/tigor-ai/.hermes/` | Volume mount |
-| GitHub PAT | `/opt/data/.env` as `GITHUB_TOKEN` | For API calls + authed pushes |
+| GitHub PAT | `/opt/data/.env` as `GITHUB_TOKEN` | Auto-injected via git credential.helper |
+| `hermes-refresh.sh` | Root of tigor-ai | Clean reclone + semantic remotes |
 
 ### GitHub access
 
@@ -94,18 +91,17 @@ Evgenii's personal monorepo split into two repos:
 ## Environment
 
 ### tigor-ai (clone: `/opt/git/tigor-ai`)
-- **Remote `origin`**: `https://github.com/enovikov11/tigor-ai.git` (push directly to main)
-- **Remote `forgejo`**: `http://10.67.69.2:3000/hermes/tigor-ai.git` (Forgejo mirror, internal)
+- **Remote `github-pull-and-push-to-main`**: `https://github.com/enovikov11/tigor-ai.git` — pull + push to main (direct)
+- **Remote `forgejo-push-for-preview`**: `http://10.67.69.2:3000/hermes/tigor-ai.git` — draft/preview pushes
 - **Worktrees**: `/opt/git/tigor-ai.worktrees/<name>/`
 - **`.hermes` config**: lives inside tigor-ai, bind-mounted to `/opt/data/` (Hermes workdir)
 
 ### tigor-no-ai (clone: `/opt/git/tigor-no-ai`)
-- **Remote `origin`**: `https://github.com/enovikov11/tigor-no-ai.git` (user's repo)
-- **NO fork** — agent pushes directly to user's repo via HTTPS with PAT in URL
+- **Remote `github-pull`**: `https://github.com/enovikov11/tigor-no-ai.git` — pull from user's repo
+- **Remote `github-push-to-feature-branch`**: `https://github.com/enovikov11-ai-agent/tigor-no-ai.git` — push feature branches (fork)
 - **NO Forgejo remote** — tigor-no-ai exists only on GitHub
 - **Worktrees**: `/opt/git/tigor-no-ai.worktrees/<name>/`
 - **.gitignore**: `**/README.md` and `**/README-tech.md` (AI files managed in tigor-ai)
-- **PR workflow**: needs fork remote (`enovikov11-ai-agent/tigor-no-ai`) added before creating PRs
 
 ## GitHub Identity
 
@@ -129,7 +125,7 @@ The tigor-ai repo follows `./<topic>/<project>` convention. Current domains:
 ## Git Workflow
 
 - **Branch protection on tigor-ai main**: squash merge and rebase only. Force push is blocked.
-- **No merge commits on main** — GitHub branch rules reject any push that introduces a merge commit. When local and remote diverge, use `git rebase origin/main` (not `git merge origin/main`).
+- **No merge commits on main** — GitHub branch rules reject any push that introduces a merge commit. When local and remote diverge, use `git rebase github-pull-and-push-to-main/main` (not merge).
 - **PR link (Forgejo)**: `http://10.67.69.2:3000/hermes/tigor-ai/compare/main...<branch>`
 
 ## README Generation
@@ -241,14 +237,8 @@ When multiple changes modify the same file (e.g. README.md), parallel subagents 
    - **Old r14 config used `ListenAddress vsock:*:22`** which replaced `0.0.0.0:22`. In r17+, the issue is `startWhenNeeded` instead.
    See `references/vm-infra.md` for full topology.
 3. **VM internet via container network (post-migration 2026-08).** Hermes runs inside a Podman container on the VM with direct internet access. No more passt/proxy/NAT needed. Neighboring services reachable via DNS: `vllm:8000`, `forgejo:3000`.
-4. **HTTPS git push requires token in URL.** `git push origin` on HTTPS-only repos fails with "could not read Username" because there's no credential helper. Use:
-  ```bash
-  TOKEN=$(grep "^GITHUB_TOKEN=" /opt/data/.env | cut -d= -f2-)
-  git push "https://$TOKEN@github.com/enovikov11/tigor-ai.git" <branch>
-  # or for tigor-no-ai
-  git push "https://$TOKEN@github.com/enovikov11/tigor-no-ai.git" <branch>
-  ```
-5. **PR creation for tigor-no-ai.** Fork remote (`enovikov11-ai-agent/tigor-no-ai`) needs to be added before creating PRs. `gh` CLI not installed — use `curl` + PAT:
+4. **HTTPS auth via credential helper.** PAT from `/opt/data/.env` is auto-injected via git credential.helper (set by `hermes-refresh.sh`). `git push <remote> <branch>` works directly — no manual token-in-URL needed. If it fails with "could not read Username", check the credential helper: `git config --global credential.helper`.
+5. **PR creation for tigor-no-ai.** Push branch to `github-push-to-feature-branch`, then create PR via `curl` + PAT (`gh` not installed):
    ```bash
    PAT=$(grep "^GITHUB_TOKEN=" /opt/data/.env | cut -d= -f2-)
    curl -s -X POST https://api.github.com/repos/enovikov11/tigor-no-ai/pulls \
@@ -270,33 +260,28 @@ When multiple changes modify the same file (e.g. README.md), parallel subagents 
      curl -s -H "Authorization: token $PAT" "https://api.github.com/repos/enovikov11/tigor-no-ai/pulls/N" | \
        python3 -c "import sys,json; print(json.load(sys.stdin)['head']['ref'])"
      ```
-   - Fetch and checkout the branch: `git fetch origin <branch>:<branch>` then `git checkout <branch>`
-   - If PR deleted a file the user wants to keep: `git checkout origin/main -- <file>`
-   - Make changes, commit, push with HTTPS token auth (see pitfall 6).
+   - Fetch and checkout the branch: `git fetch github-push-to-feature-branch <branch>:<branch>` then `git checkout <branch>`
+   - If PR deleted a file the user wants to keep: `git checkout github-pull/main -- <file>`
+   - Make changes, commit, push (credential helper handles HTTPS auth).
 
-6. **HTTPS git push requires token in URL.** `git push origin` on tigor-no-ai fails with "could not read Username" because remotes are HTTPS without credential helper. Use:
-   ```bash
-   TOKEN=$(grep "^GITHUB_TOKEN=" /opt/data/.env | cut -d= -f2-)
-   git push "https://${TOKEN}@github.com/enovikov11-ai-agent/tigor-no-ai.git" <branch>
-   ```
-7. **`git push --force-with-lease` "stale info" on worktrees.** Worktrees keep stale ref metadata. When push fails with "stale info", do:
-   ```bash
-   git fetch origin <branch>
-   git push origin HEAD:<branch> --force
-   ```
-   This refreshes the local tracking ref and forces the update. Do NOT retry `--force-with-lease` without fetching first — it will keep failing.
-8. **Python `.format()` eats bash `${VAR}` braces.** When generating shell scripts in Python, never use `.format()` on strings containing `${VAR}` — Python interprets `{VAR}` as a replacement field and raises `KeyError`. Use `+` string concatenation or a unique placeholder token (e.g. `$VARN$`) with `.replace()` instead.
-9. **Don't overwrite without `git mv` first.**
-10. **Never overwrite user-authored root README blocks.** Title line, `> **Note:**` blocks, and `See also` links must be preserved verbatim.
-11. **Sub-READMEs are NOT AI targets.** Files like `maker/0-t100-gpt/arduino/README.md`, `infra/0-box/power/README.md`, `ai/0-p-agent/ideas/README.md` are original and should not be modified or renamed.
-12. **Check actual repo structure.** The repo grows — don't assume projects from old sessions still exist in the same place. Always `find . -maxdepth 2 -mindepth 2 -type d` before generating.
-13. **infra/0-stateless lives in tigor-no-ai.** Don't touch it when working on tigor-ai.
-14. **Create domain-level READMEs.** Always generate `README.md` for each top-level directory (ai/, analytics/, games/, etc.) in addition to per-project READMEs.
-15. **One commit per project.** Never bundle unrelated projects in one commit.
-16. **Maintain DEAD.md.** Every deletion gets a line in DEAD.md with the commit SHA link.
-17. **Merge README changes into one branch** on the fresh main — don't push multiple readme-* feature branches.
-18. **NEVER squash-merge multi-project branches.** The user explicitly forbade this — use `git merge --no-ff`. BUT the repo enforces squash-only, so **always verify content actually landed** after squash (check files are gone, README is updated, etc.). Squash can silently preserve files if the merge base was wrong.
-19. **Case-insensitive filesystem collisions.** macOS (HFS+/APFS) cannot cohost `README.md` and `readme.md` — git clone fails with collision warnings, and one file is silently dropped. If a project has both, rename the lowercase variant (e.g. `readme.md` → `notes.md`) via `git mv` and push. Verify with `git ls-tree -r HEAD --name-only | grep -i readme` to find all collisions before pushing.
+6. **`git push --force-with-lease` "stale info" on worktrees.** Worktrees keep stale ref metadata. When push fails with "stale info", do:
+  ```bash
+  git fetch <remote> <branch>
+  git push <remote> HEAD:<branch> --force
+  ```
+  This refreshes the local tracking ref and forces the update. Do NOT retry `--force-with-lease` without fetching first — it will keep failing.
+7. **Python `.format()` eats bash `${VAR}` braces.** When generating shell scripts in Python, never use `.format()` on strings containing `${VAR}` — Python interprets `{VAR}` as a replacement field and raises `KeyError`. Use `+` string concatenation or a unique placeholder token (e.g. `$VARN$`) with `.replace()` instead.
+8. **Don't overwrite without `git mv` first.**
+9. **Never overwrite user-authored root README blocks.** Title line, `> **Note:**` blocks, and `See also` links must be preserved verbatim.
+10. **Sub-READMEs are NOT AI targets.** Files like `maker/0-t100-gpt/arduino/README.md`, `infra/0-box/power/README.md`, `ai/0-p-agent/ideas/README.md` are original and should not be modified or renamed.
+11. **Check actual repo structure.** The repo grows — don't assume projects from old sessions still exist in the same place. Always `find . -maxdepth 2 -mindepth 2 -type d` before generating.
+12. **infra/0-stateless lives in tigor-no-ai.** Don't touch it when working on tigor-ai.
+13. **Create domain-level READMEs.** Always generate `README.md` for each top-level directory (ai/, analytics/, games/, etc.) in addition to per-project READMEs.
+14. **One commit per project.** Never bundle unrelated projects in one commit.
+15. **Maintain DEAD.md.** Every deletion gets a line in DEAD.md with the commit SHA link.
+16. **Merge README changes into one branch** on the fresh main — don't push multiple readme-* feature branches.
+17. **NEVER squash-merge multi-project branches.** The user explicitly forbade this — use `git merge --no-ff`. BUT the repo enforces squash-only, so **always verify content actually landed** after squash (check files are gone, README is updated, etc.). Squash can silently preserve files if the merge base was wrong.
+18. **Case-insensitive filesystem collisions.** macOS (HFS+/APFS) cannot cohost `README.md` and `readme.md` — git clone fails with collision warnings, and one file is silently dropped. If a project has both, rename the lowercase variant (e.g. `readme.md` → `notes.md`) via `git mv` and push. Verify with `git ls-tree -r HEAD --name-only | grep -i readme` to find all collisions before pushing.
 
 ## Verification Checklist
 

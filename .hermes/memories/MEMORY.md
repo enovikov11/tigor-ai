@@ -4,9 +4,13 @@ Headless generative art: NO browser on VPS. Validate algorithm in Python (math.s
 §
 Кастомные скиллы хранятся только в skills/tigor/. Всё остальное в skills/ — бандловое или чужое, не трекать в git. Все новые скиллы создавать в skills/tigor/.
 §
-NEVER push to GitHub without explicit request. Repos are regular HTTPS clones at /opt/git/ (non-bare). tigor-ai: origin=GitHub, forgejo=Forgejo. tigor-no-ai: origin=GitHub user repo. Worktrees at /opt/git/tigor-*.worktrees/. .hermes config lives in tigor-ai/.hermes/ bind-mounted to /opt/data.
+NEVER push to GitHub without explicit request. Repos at /opt/git/ (HTTPS clones, semantic remotes encode permissions).
+tigor-ai: `github-pull-and-push-to-main` (direct push), `forgejo-push-for-preview` (draft). Push main there.
+tigor-no-ai: `github-pull` (read user repo), `github-push-to-feature-branch` (fork). Branch→push→PR to github-pull/main.
+Worktrees at /opt/git/tigor-*.worktrees/. .hermes in tigor-ai/.hermes/ mounted to /opt/data.
+`hermes-refresh.sh` in tigor-ai root: clean reclone + remotes. PAT via git credential.helper from /opt/data/.env.
 §
-Hermes .hermes config now lives in tigor-ai/.hermes/ on GitHub (enovikov11/tigor-ai:main). No more separate hermes-config repo. Forgejo tigor bare repo syncs ai/main → forgejo/main.
+Hermes .hermes config in tigor-ai/.hermes/ on GitHub (enovikov11/tigor-ai:main). Forgejo mirror at forgejo-push-for-preview.
 §
 Hermes runs in a Podman container on NixOS host. Host `/home/nixos` is bind-mounted. Container has `docker` CLI (not podman), Podman socket at `/run/user/1000/podman/podman.sock`. Use `DOCKER_HOST=unix:///run/user/1000/podman/podman.sock docker ...` to run containers. Host has `/ssd` storage (NOT mounted in hermes container) — must spawn containers with `-v /ssd:/ssd` to access it.
 §
