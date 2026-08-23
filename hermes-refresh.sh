@@ -52,8 +52,9 @@ cd "$GIT_DIR"
 mkdir -p tigor-no-ai.worktrees
 echo "✓ tigor-no-ai.worktrees configured"
 
-cp -r "$SECRETS_DIR/*" "$GIT_DIR/tigor-ai/.hermes/"
-echo "✓ Secrets restored from $BACKUP"
+mkdir -p "$GIT_DIR/tigor-ai/.hermes"
+cp -a "$SECRETS_DIR"/. "$GIT_DIR/tigor-ai/.hermes/"
+echo "✓ Secrets restored from $SECRETS_DIR"
 
 podman start hermes
 echo "✓ Hermes started"
