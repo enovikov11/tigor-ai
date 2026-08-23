@@ -30,13 +30,6 @@ git remote add github-pull-and-push-to-main https://github.com/enovikov11/tigor-
 echo "✓ tigor-ai configured"
 
 cd "$GIT_DIR"
-git clone https://github.com/enovikov11/tigor-ai.git tigor-ai.public-http-view
-cd "$GIT_DIR/tigor-ai.public-http-view"
-git remote remove origin
-git remote add github-only-pull-only-main https://github.com/enovikov11/tigor-ai.git
-echo "✓ tigor-ai.public-http-view configured"
-
-cd "$GIT_DIR"
 mkdir -p tigor-ai.worktrees
 echo "✓ tigor-ai.worktrees configured"
 
