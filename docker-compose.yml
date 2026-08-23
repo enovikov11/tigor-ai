@@ -1,0 +1,68 @@
+services:
+  vllm:
+    container_name: vllm
+    image: docker.io/vllm/vllm-openai:nightly
+    restart: unless-stopped
+    devices:
+      - nvidia.com/gpu=all
+    environment:
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+      PYTORCH_ALLOC_CONF: expandable_segments:True
+    volumes:
+      - /ssd/internet/huggingface.co:/huggingface.co:ro
+      - /home/nixos/vllm-cache:/root/.cache/vllm
+    shm_size: 16g
+    ports:
+      - "8000:8000"
+    command: >
+      /huggingface.co/Qwen/Qwen3.6-27B-FP8
+      --served-model-name Qwen3.6-27B-FP8
+      --host 0.0.0.0
+      --port 8000
+      --max-model-len 262144
+      --max-num-seqs 512
+      --gpu-memory-utilization 0.95
+      --kv-cache-dtype fp8
+      --optimization-level 3
+      --performance-mode interactivity
+      --reasoning-parser qwen3
+      --enable-auto-tool-choice
+      --tool-call-parser qwen3_coder
+      --speculative-config '{"method":"qwen3_next_mtp","num_speculative_tokens":2}'
+
+  forgejo:
+    container_name: forgejo
+    image: codeberg.org/forgejo/forgejo:16
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - /home/nixos/forgejo-data:/data
+
+  hermes:
+    container_name: hermes
+    image: docker.io/nousresearch/hermes-agent
+    restart: unless-stopped
+    volumes:
+      - /home/nixos/hermes-git/tigor-ai/.hermes:/opt/data
+      - /home/nixos/hermes-git:/opt/git
+      - /run/user/1000/podman/podman.sock:/run/user/1000/podman/podman.sock
+    ports:
+      - "9119:9119"
+    environment:
+      HERMES_DASHBOARD: "1"
+      DOCKER_HOST: "unix:///run/user/1000/podman/podman.sock"
+    command: ["gateway", "run"]
+
+  caddy:
+    image: docker.io/library/caddy:2
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /home/nixos/Caddyfile:/etc/caddy/Caddyfile
+      - /home/nixos/pages-data/repo:/srv/repo:ro
+      - /home/nixos/pages-data/caddy-data:/data
+      - /home/nixos/pages-data/caddy-config:/config
+    restart: unless-stopped

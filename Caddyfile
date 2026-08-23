@@ -1,0 +1,9 @@
+pages.ai.tgr.rs:443 {
+    root * /srv/repo
+    encode gzip
+
+    @git    path /.git*
+    respond @git 404
+
+    file_server
+}
