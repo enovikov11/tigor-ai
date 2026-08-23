@@ -4,11 +4,7 @@ Headless generative art: NO browser on VPS. Validate algorithm in Python (math.s
 §
 Кастомные скиллы хранятся только в skills/tigor/. Всё остальное в skills/ — бандловое или чужое, не трекать в git. Все новые скиллы создавать в skills/tigor/.
 §
-NEVER push to GitHub without explicit request. Fork main MUST mirror upstream main — no own commits.
-
-Bare repos: use `git worktree add -b <branch> <path> remotes/origin/main` → edit → commit → push. Direct edits under bare `pages/` aren't tracked.
-
-tigor-ai (enovikov11-ai-agent/tigor-ai): push directly to main. tigor-no-ai (enovikov11/tigor-no-ai): branch on agent-fork → PR to upstream. Bare repo at /opt/data/tigor-no-ai (origin=agent-fork, upstream=user). Work clones: tigor-no-ai-work (origin=user), tigor-no-ai-pr (origin=agent-fork).
+NEVER push to GitHub without explicit request. Repos are regular HTTPS clones at /opt/git/ (non-bare). tigor-ai: origin=GitHub, forgejo=Forgejo. tigor-no-ai: origin=GitHub user repo. Worktrees at /opt/git/tigor-*.worktrees/. .hermes config lives in tigor-ai/.hermes/ bind-mounted to /opt/data.
 §
 Hermes .hermes config now lives in tigor-ai/.hermes/ on GitHub (enovikov11/tigor-ai:main). No more separate hermes-config repo. Forgejo tigor bare repo syncs ai/main → forgejo/main.
 §

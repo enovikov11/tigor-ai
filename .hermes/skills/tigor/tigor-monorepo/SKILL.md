@@ -12,59 +12,64 @@ metadata:
 
 # Tigor Monorepo Workflow
 
-## Pre-flight: Bare repo editing rule
+## Pre-flight: Worktree rule
 
-**NEVER edit files directly under a bare repo** (`/opt/data/tigor-no-ai/pages/`, etc.). Direct disk edits are NOT tracked by git — they sit outside the object store. Every edit MUST go through a worktree:
+**Both repos are regular clones** (non-bare). Worktrees are created from them directly:
 
 ```bash
-cd /opt/data/tigor-no-ai
-git worktree add -b <branch> /opt/data/tigor-no-ai.worktrees/<name> remotes/origin/main
-# Edit files in the worktree → commit → push
-git worktree remove /opt/data/tigor-no-ai.worktrees/<name>
+# tigor-ai
+cd /opt/git/tigor-ai
+git worktree add -b <branch> /opt/git/tigor-ai.worktrees/<name> origin/main
+# Edit → commit → push → PR (or direct push to main)
+git worktree remove /opt/git/tigor-ai.worktrees/<name>
+
+# tigor-no-ai
+cd /opt/git/tigor-no-ai
+git worktree add -b <branch> /opt/git/tigor-no-ai.worktrees/<name> origin/main
+# Edit → commit → push to fork → PR to upstream
+git worktree remove /opt/git/tigor-no-ai.worktrees/<name>
 ```
 
-If `git worktree` fails with "permission denied" or "must be run in a work tree", check for stale `GIT_WORK_TREE` env var: `env | grep GIT` and `unset GIT_WORK_TREE`.
+No `GIT_WORK_TREE` env var — both are standard clones.
 
 ## Pre-flight: PR target
 
 **tigor-no-ai PRs must target `enovikov11/tigor-no-ai` (upstream), NOT the agent fork.**
-The agent fork (`enovikov11-ai-agent/tigor-no-ai`) is the source branch only. PR creation via curl:
+Fork remote (`enovikov11-ai-agent/tigor-no-ai`) must be added before first PR:
+```bash
+cd /opt/git/tigor-no-ai
+git remote add fork https://github.com/enovikov11-ai-agent/tigor-no-ai.git
+```
 
+PR creation via curl:
 ```bash
 PAT=$(grep "^GITHUB_TOKEN=" /opt/data/.env | cut -d= -f2-)
 curl -s -X POST https://api.github.com/repos/enovikov11/tigor-no-ai/pulls \
   -H "Authorization: token $PAT" \
-  -H "Accept: application/vnd.github.v3+json" \
   -H "Content-Type: application/json" \
   -d '{"title":"...","head":"enovikov11-ai-agent:<branch>","base":"main","body":"..."}'
 ```
 
 ## Pre-flight: Initialization Check
 
-**BEFORE any git work**, verify that bare repos and worktrees exist:
+**Repos are at** `/opt/git/` (inside container). `.hermes` config lives at `/opt/data/` (which is `/opt/git/tigor-ai/.hermes/` bind-mounted):
 
 ```bash
-# Quick check
-ls /opt/data/tigor/HEAD /opt/data/tigor-no-ai/HEAD 2>/dev/null
-# If any missing → run full init (see below)
+ls /opt/git/tigor-ai/.git/HEAD /opt/git/tigor-no-ai/.git/HEAD 2>/dev/null
 ```
 
-If something is missing, check whether initialization has been done. If not, perform it:
+Both are regular HTTPS clones (non-bare). No bare repos — no `git archive` or `GIT_WORK_TREE` workarounds needed.
 
-1. **tigor** (bare: `/opt/data/tigor`): clone from forgejo → rename remote to `forgejo` → add `ai` (GitHub) remote
-2. **tigor-no-ai** (bare: `/opt/data/tigor-no-ai`): clone from GitHub (requires SSH/PAT)
-3. Create dirs: `mkdir -p /opt/data/tigor.worktrees /opt/data/tigor-no-ai.worktrees`
+### Current state
 
-### Current init status (as of 2026-08-22) — ✅ DONE
-
-| Component | Status |
-|---|---|
-| tigor bare (`/opt/data/tigor`) | ✅ forgejo + ai + no-ai remotes |
-| tigor-no-ai bare (`/opt/data/tigor-no-ai`) | ✅ origin (fork) + upstream remotes |
-| worktrees dirs | ✅ created |
-| GitHub PAT | ✅ `git config --global github.token` + `.env` |
-| `gh` CLI | ❌ not installed — use `curl` + PAT for PRs |
-| Hermes config | ✅ lives in tigor-ai/.hermes/ (pushed to ai/main) |
+| Component | Location | Type |
+|---|---|---|
+| tigor-ai | `/opt/git/tigor-ai` | Regular clone, origin=GitHub, forgejo added |
+| tigor-no-ai | `/opt/git/tigor-no-ai` | Regular clone, origin=GitHub |
+| worktrees dirs | `/opt/git/tigor-ai.worktrees/` | Empty, ready |
+| worktrees dirs | `/opt/git/tigor-no-ai.worktrees/` | Empty, ready |
+| .hermes config | `/opt/data/` → `/opt/git/tigor-ai/.hermes/` | Volume mount |
+| GitHub PAT | `/opt/data/.env` as `GITHUB_TOKEN` | For API calls + authed pushes |
 
 ### GitHub access
 
@@ -88,43 +93,19 @@ Evgenii's personal monorepo split into two repos:
 
 ## Environment
 
-### tigor-ai (bare repo: `/opt/data/tigor/`)
-- **Remote `ai`**: `git@github.com:enovikov11/tigor-ai.git` (push directly to main)
-- **Remote `no-ai`**: `git@github.com:enovikov11-ai-agent/tigor-no-ai.git` (fork, for PRs)
-- **Remote `forgejo`**: `http://hermes:polio-paramedic-dweeb@forgejo:3000/hermes/tigor.git` (Forgejo mirror)
-- **Worktrees**: `/opt/data/tigor.worktrees/<name>/`
-- **Each chat = its own worktree**: `git -C /opt/data/tigor worktree add /opt/data/tigor.worktrees/<name> -b <name> ai/main`
+### tigor-ai (clone: `/opt/git/tigor-ai`)
+- **Remote `origin`**: `https://github.com/enovikov11/tigor-ai.git` (push directly to main)
+- **Remote `forgejo`**: `http://10.67.69.2:3000/hermes/tigor-ai.git` (Forgejo mirror, internal)
+- **Worktrees**: `/opt/git/tigor-ai.worktrees/<name>/`
+- **`.hermes` config**: lives inside tigor-ai, bind-mounted to `/opt/data/` (Hermes workdir)
 
-### tigor-no-ai (bare repo: `/opt/data/tigor-no-ai/`)
-- **Remote `origin`**: `git@github.com:enovikov11-ai-agent/tigor-no-ai.git` (your fork)
-- **Remote `upstream`**: `git@github.com:enovikov11/tigor-no-ai.git` (enovikov11's original)
+### tigor-no-ai (clone: `/opt/git/tigor-no-ai`)
+- **Remote `origin`**: `https://github.com/enovikov11/tigor-no-ai.git` (user's repo)
+- **NO fork** — agent pushes directly to user's repo via HTTPS with PAT in URL
 - **NO Forgejo remote** — tigor-no-ai exists only on GitHub
-- **Worktrees**: `/opt/data/tigor-no-ai.worktrees/<name>/`
+- **Worktrees**: `/opt/git/tigor-no-ai.worktrees/<name>/`
 - **.gitignore**: `**/README.md` and `**/README-tech.md` (AI files managed in tigor-ai)
-- **PR workflow** (user-corrected):
-  - **Invariant: `origin/main` MUST equal `upstream/main`** — no own commits on fork main.
-  - Sync fork main: `git fetch upstream && git checkout -B main upstream/main && git push -f origin main`
-  - Create a feature branch: `git checkout -b fix/<topic>`
-  - Make change(s), commit, push branch: `git push origin fix/<topic>`
-  - Create PR from branch to upstream main via curl + PAT
-  - **Never commit to main directly** — even one fix breaks the invariant
-  - **Always verify the PR diff** — if it shows unrelated upstream divergence, the fork main wasn't synced
-  - **Dirty fork contamination.** If fork main has stale commits (e.g. old feature branches), every new branch inherits them and PRs include garbage. Fix:
-     1. Close the contaminated PR
-     2. Sync fork main via API:
-        ```bash
-        PAT=$(grep "^GITHUB_TOKEN=" /opt/data/.env | cut -d= -f2-)
-        curl -s -X POST -H "Authorization: token $PAT" \
-          "https://api.github.com/repos/enovikov11-ai-agent/tigor-no-ai/merge-upstream" \
-          -d '{"branch":"main"}'
-        ```
-     3. Reset local: `git fetch origin main && git reset --hard origin/main`
-     4. Cherry-pick only your commit: `git checkout -b fix/topic && git cherry-pick <sha>`
-     5. Push clean branch, create new PR
-  - **`enovikov11-ai-agent` token is read-only for `enovikov11/tigor-no-ai`.** Push to the fork, never upstream directly.
-  - **Prevent contamination.** Before creating any new branch, run `curl -s -X POST -H "Authorization: token $PAT" https://api.github.com/repos/enovikov11-ai-agent/tigor-no-ai/merge-upstream -d '{"branch":"main"}'` — idempotent, syncs fork main with upstream if behind.
-  - **Minimal changes.** The user prefers surgical patches (flags in existing `stateless`, +1 line in config) over standalone modules. If a change fits as a parameter or small module inside existing code, do that — don't extract a new top-level module unless it's genuinely reusable.
-  - **PAT location:** `GITHUB_TOKEN` lives in `/opt/data/.env` (grep it), NOT `git config --global github.token`. Use: `PAT=$(grep "^GITHUB_TOKEN=" /opt/data/.env | cut -d= -f2-)`
+- **PR workflow**: needs fork remote (`enovikov11-ai-agent/tigor-no-ai`) added before creating PRs
 
 ## GitHub Identity
 
@@ -148,8 +129,8 @@ The tigor-ai repo follows `./<topic>/<project>` convention. Current domains:
 ## Git Workflow
 
 - **Branch protection on tigor-ai main**: squash merge and rebase only. Force push is blocked.
-- **No merge commits on main** — GitHub branch rules reject any push that introduces a merge commit. When local and remote diverge, use `git rebase ai/main` (not `git merge ai/main`).
-- **PR link (Forgejo)**: `http://10.67.69.1:3000/hermes/tigor/compare/main...<branch>`
+- **No merge commits on main** — GitHub branch rules reject any push that introduces a merge commit. When local and remote diverge, use `git rebase origin/main` (not `git merge origin/main`).
+- **PR link (Forgejo)**: `http://10.67.69.2:3000/hermes/tigor-ai/compare/main...<branch>`
 
 ## README Generation
 
@@ -260,11 +241,14 @@ When multiple changes modify the same file (e.g. README.md), parallel subagents 
    - **Old r14 config used `ListenAddress vsock:*:22`** which replaced `0.0.0.0:22`. In r17+, the issue is `startWhenNeeded` instead.
    See `references/vm-infra.md` for full topology.
 3. **VM internet via container network (post-migration 2026-08).** Hermes runs inside a Podman container on the VM with direct internet access. No more passt/proxy/NAT needed. Neighboring services reachable via DNS: `vllm:8000`, `forgejo:3000`.
-4. **Bare repo owned by root — cannot create worktrees.** The bare repos (`/opt/data/tigor-no-ai/` and `/opt/data/tigor/`) are owned by root (from old mount). `git worktree add` fails with "Permission denied" on refs. Workarounds:
-   - **Best:** `chown -R hermes:hermes /opt/data/tigor-no-ai/` on the host (requires root access to VM)
-   - **Fallback:** Extract files with `git archive --format=tar upstream/main -o /tmp/main.tar`, work in a temp directory, then apply patches manually
-   - **Safe.directory:** Still need `git config --global --add safe.directory /opt/data/tigor-no-ai` for bare repo reads
-5. **PR creation via curl + PAT.** (`gh` is not installed.)
+4. **HTTPS git push requires token in URL.** `git push origin` on HTTPS-only repos fails with "could not read Username" because there's no credential helper. Use:
+  ```bash
+  TOKEN=$(grep "^GITHUB_TOKEN=" /opt/data/.env | cut -d= -f2-)
+  git push "https://$TOKEN@github.com/enovikov11/tigor-ai.git" <branch>
+  # or for tigor-no-ai
+  git push "https://$TOKEN@github.com/enovikov11/tigor-no-ai.git" <branch>
+  ```
+5. **PR creation for tigor-no-ai.** Fork remote (`enovikov11-ai-agent/tigor-no-ai`) needs to be added before creating PRs. `gh` CLI not installed — use `curl` + PAT:
    ```bash
    PAT=$(grep "^GITHUB_TOKEN=" /opt/data/.env | cut -d= -f2-)
    curl -s -X POST https://api.github.com/repos/enovikov11/tigor-no-ai/pulls \
