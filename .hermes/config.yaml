@@ -7,6 +7,7 @@ agent:
   max_turns: 150
   verbose: true
   reasoning_effort: medium
+  ask: false
   personalities:
     helpful: You are a helpful, friendly AI assistant.
     concise: You are a concise assistant. Keep responses brief and to the point.
