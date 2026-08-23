@@ -61,8 +61,8 @@ services:
       - "80:80"
       - "443:443"
     volumes:
-      - /home/nixos/Caddyfile:/etc/caddy/Caddyfile
-      - /home/nixos/pages-data/repo:/srv/repo:ro
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - /home/nixos/tigor-ai.public-for-http:/srv/data
       - /home/nixos/pages-data/caddy-data:/data
       - /home/nixos/pages-data/caddy-config:/config
     restart: unless-stopped

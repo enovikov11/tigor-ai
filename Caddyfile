@@ -1,5 +1,5 @@
-pages.ai.tgr.rs:443 {
-    root * /srv/repo
+10.67.69.2:80 {
+    root * /srv/data
     encode gzip
 
     @git    path /.git*
