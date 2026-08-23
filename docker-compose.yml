@@ -57,9 +57,6 @@ services:
 
   caddy:
     image: docker.io/library/caddy:2
-    ports:
-      - "80:80"
-      - "443:443"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile
       - /home/nixos/tigor-ai.public-for-http:/srv/data
