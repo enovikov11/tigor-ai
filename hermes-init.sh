@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-SECRETS_DIR="$HOME/hermes-secrets"
-
 echo "=== Hermes Init ==="
 
 # --- Clone repos ---
@@ -25,18 +23,7 @@ git remote add github-pull https://github.com/enovikov11/tigor-no-ai.git
 git remote add github-push-to-feature-branch https://github.com/enovikov11-ai-agent/tigor-no-ai.git
 echo "✓ tigor-no-ai remotes"
 
-# --- Secrets ---
-mkdir -p ../tigor-ai/.hermes
-cp -a "$SECRETS_DIR"/. ../tigor-ai/.hermes/
-echo "✓ Secrets copied"
+cp -r ~/hermes-secrets/. ~/tigor-ai/.hermes/
+chmod -R 777 ~/tigor-ai/.hermes/
 
-# --- SSH config ---
-ssh-keyscan host.containers.internal >> ~/.ssh/known_hosts 2>/dev/null || true
-echo "✓ SSH known_hosts"
 
-# --- Start services ---
-cd ~/tigor-ai
-docker compose up -d
-echo "✓ Services started"
-
-echo "=== Done ==="
