@@ -1,7 +1,6 @@
 model:
   default: Qwen3.6-27B-FP8
-  provider: custom
-  base_url: http://vllm:8000/v1
+  provider: custom:local
   max_compressions: 10
 agent:
   max_turns: 150
@@ -120,10 +119,24 @@ platform_toolsets:
     - vision
     - web
 security:
-  redact_secrets: true
+  redact_secrets: false
 context_compression:
   threshold: 40
   target_ratio: 0.15
+custom_providers:
+  - name: local
+    base_url: http://vllm:8000/v1
+    model: Qwen3.6-27B-FP8
+    models:
+      Qwen3.6-27B-FP8:
+        context_length: 262144
+  - name: glm
+    base_url: https://openrouter.ai/api/v1
+    model: z-ai/glm-5.3
+  - name: kimi
+    base_url: https://openrouter.ai/api/v1
+    model: moonshotai/kimi-k3
+
 dashboard:
   basic_auth:
     username: admin
