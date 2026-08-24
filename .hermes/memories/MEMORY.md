@@ -2,7 +2,7 @@ User prefers SHORT scripts (~20 lines) using standard tools. Code must be trivia
 §
 Headless generative art: NO browser on VPS. Validate algorithm in Python (math.sin/cos, check bounds/NaN) → render Pillow PNG/GIF → only then write p5.js HTML. Pillow pre-installed, Cairo not. GIF: frames[0].save('out.gif', save_all=True, append_images=frames[1:], duration=100, loop=0).
 §
-Кастомные скиллы хранятся только в skills/tigor/. Всё остальное в skills/ — бандловое или чужое, не трекать в git. Все новые скиллы создавать в skills/tigor/.
+Скиллы тигора: `~/.hermes/skills/tigor` → симлинк на `~/tigor-ai/.hermes/skills/tigor/` (git-трек). `skill_manage` пишет в `~/./skills/` → симлинк обеспечивает персистентность. Бандловые скиллы в `skills/` не трекать. Симлинк прописан в `tigor-no-ai/hermes-init.sh`.
 §
 Repos at /home/nixos/ on VM (SSH terminal). Hermes in Podman container, .hermes bind-mounted as /opt/data/. Worktrees at /home/nixos/tigor-*.worktrees/.
 §
