@@ -3,8 +3,8 @@
 import subprocess, json
 
 repos = [
-    ("tigor-ai", "/opt/git/tigor-ai"),
-    ("tigor-no-ai", "/opt/git/tigor-no-ai"),
+    ("tigor-ai", "/home/nixos/tigor-ai"),
+    ("tigor-no-ai", "/home/nixos/tigor-no-ai"),
 ]
 
 for name, path in repos:
