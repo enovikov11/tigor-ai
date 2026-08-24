@@ -46,15 +46,13 @@ agent:
       is AMAZING and we're gonna CRUSH IT together! This is gonna be LEGENDARY! ARE
       YOU READY?! LET'S DO THIS! 💪😤🚀
 terminal:
-  backend: local
+  backend: ssh
+  ssh_host: host.containers.internal
+  ssh_user: nixos
+  ssh_port: 22
+  ssh_key: /home/nixos/.ssh/id_ed25519
   cwd: .
-  timeout: 180
-  home_mode: auto
-  container_cpu: 1
-  container_memory: 5120
-  container_disk: 51200
-  container_persistent: true
-  docker_mount_cwd_to_workspace: false
+  timeout: 60
   lifetime_seconds: 300
 web:
   backend: ddgs
