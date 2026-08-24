@@ -65,6 +65,7 @@ Both are regular HTTPS clones (non-bare). No bare repos — no `git archive` or 
 | worktrees dirs | `/home/nixos/tigor-ai.worktrees/` | Empty, ready |
 | worktrees dirs | `/home/nixos/tigor-no-ai.worktrees/` | Empty, ready |
 | .hermes config | `/opt/data/` (container) ↔ `/home/nixos/tigor-ai/.hermes/` (host) | Volume mount |
+| `~/.hermes` | symlink → `~/tigor-ai/.hermes/` (all Hermes state via git) | Symlink |
 | GitHub PAT | `/opt/data/.env` as `GITHUB_TOKEN` | Auto-injected via git credential.helper |
 | `hermes-refresh.sh` | Root of tigor-ai | Clean reclone + semantic remotes |
 
