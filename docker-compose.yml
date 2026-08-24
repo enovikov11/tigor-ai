@@ -10,7 +10,7 @@ services:
       NVIDIA_DRIVER_CAPABILITIES: compute,utility
       PYTORCH_ALLOC_CONF: expandable_segments:True
     volumes:
-      - /ssd/internet/huggingface.co:/huggingface.co:ro
+      - /ssd/public/internet/huggingface.co:/huggingface.co:ro
       - /home/nixos/vllm-cache:/root/.cache/vllm
     shm_size: 16g
     ports:
@@ -44,8 +44,13 @@ services:
     container_name: hermes
     image: docker.io/nousresearch/hermes-agent
     restart: unless-stopped
+    userns_mode: "keep-id:uid=10000,gid=10000"
+    user: "0:0"
     volumes:
       - /home/nixos/tigor-ai/.hermes:/opt/data
+      - /home/nixos/hermes-secrets/secrets:/opt/data/secrets
+      - /home/nixos/hermes-secrets/auth.json:/opt/data/auth.json
+      - /home/nixos/hermes-secrets/.env:/opt/data/.env
       - /home/nixos/.ssh:/opt/hermes/.ssh:ro
     ports:
       - "9119:9119"
