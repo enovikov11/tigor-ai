@@ -19,16 +19,16 @@ metadata:
 
 ```bash
 # tigor-ai — pull from github-pull-and-push-to-main, worktree from its main
-cd /opt/git/tigor-ai
-git worktree add -b <branch> /opt/git/tigor-ai.worktrees/<name> github-pull-and-push-to-main/main
+cd /home/nixos/tigor-ai
+git worktree add -b <branch> /home/nixos/tigor-ai.worktrees/<name> github-pull-and-push-to-main/main
 # Edit → commit → push to github-pull-and-push-to-main main (or forgejo-push-for-preview for draft)
-git worktree remove /opt/git/tigor-ai.worktrees/<name>
+git worktree remove /home/nixos/tigor-ai.worktrees/<name>
 
 # tigor-no-ai — pull from github-pull, push to github-push-to-feature-branch
-cd /opt/git/tigor-no-ai
-git worktree add -b <branch> /opt/git/tigor-no-ai.worktrees/<name> github-pull/main
+cd /home/nixos/tigor-no-ai
+git worktree add -b <branch> /home/nixos/tigor-no-ai.worktrees/<name> github-pull/main
 # Edit → commit → push to github-push-to-feature-branch → PR to github-pull
-git worktree remove /opt/git/tigor-no-ai.worktrees/<name>
+git worktree remove /home/nixos/tigor-no-ai.worktrees/<name>
 ```
 
 No `GIT_WORK_TREE` env var — both are standard clones.
@@ -48,10 +48,10 @@ curl -s -X POST https://api.github.com/repos/enovikov11/tigor-no-ai/pulls \
 
 ## Pre-flight: Initialization Check
 
-**Repos are at** `/opt/git/` (inside container). `.hermes` config lives at `/opt/data/` (which is `/opt/git/tigor-ai/.hermes/` bind-mounted):
+**Repos are at** `/home/nixos/` on the VM (accessed via SSH terminal). `.hermes` config lives at `/opt/data/` (container, bind-mounted from host):
 
 ```bash
-ls /opt/git/tigor-ai/.git/HEAD /opt/git/tigor-no-ai/.git/HEAD 2>/dev/null
+ls /home/nixos/tigor-ai/.git/HEAD /home/nixos/tigor-no-ai/.git/HEAD 2>/dev/null
 ```
 
 Both are regular HTTPS clones (non-bare). No bare repos — no `git archive` or `GIT_WORK_TREE` workarounds needed.
@@ -60,11 +60,11 @@ Both are regular HTTPS clones (non-bare). No bare repos — no `git archive` or 
 
 | Component | Location | Type |
 |---|---|---|
-| tigor-ai | `/opt/git/tigor-ai` | Regular clone, HTTPS |
-| tigor-no-ai | `/opt/git/tigor-no-ai` | Regular clone, HTTPS |
-| worktrees dirs | `/opt/git/tigor-ai.worktrees/` | Empty, ready |
-| worktrees dirs | `/opt/git/tigor-no-ai.worktrees/` | Empty, ready |
-| .hermes config | `/opt/data/` → `/opt/git/tigor-ai/.hermes/` | Volume mount |
+| tigor-ai | `/home/nixos/tigor-ai` | Regular clone, HTTPS |
+| tigor-no-ai | `/home/nixos/tigor-no-ai` | Regular clone, HTTPS |
+| worktrees dirs | `/home/nixos/tigor-ai.worktrees/` | Empty, ready |
+| worktrees dirs | `/home/nixos/tigor-no-ai.worktrees/` | Empty, ready |
+| .hermes config | `/opt/data/` (container) ↔ `/home/nixos/tigor-ai/.hermes/` (host) | Volume mount |
 | GitHub PAT | `/opt/data/.env` as `GITHUB_TOKEN` | Auto-injected via git credential.helper |
 | `hermes-refresh.sh` | Root of tigor-ai | Clean reclone + semantic remotes |
 
@@ -110,17 +110,17 @@ Evgenii's personal monorepo split into two repos:
 
 ## Environment
 
-### tigor-ai (clone: `/opt/git/tigor-ai`)
+### tigor-ai (clone: `/home/nixos/tigor-ai`)
 - **Remote `github-pull-and-push-to-main`**: `https://github.com/enovikov11/tigor-ai.git` — pull + push to main (direct)
 - **Remote `forgejo-push-for-preview`**: `http://10.67.69.2:3000/hermes/tigor-ai.git` — draft/preview pushes
-- **Worktrees**: `/opt/git/tigor-ai.worktrees/<name>/`
+- **Worktrees**: `/home/nixos/tigor-ai.worktrees/<name>/`
 - **`.hermes` config**: lives inside tigor-ai, bind-mounted to `/opt/data/` (Hermes workdir)
 
-### tigor-no-ai (clone: `/opt/git/tigor-no-ai`)
+### tigor-no-ai (clone: `/home/nixos/tigor-no-ai`)
 - **Remote `github-pull`**: `https://github.com/enovikov11/tigor-no-ai.git` — pull from user's repo
 - **Remote `github-push-to-feature-branch`**: `https://github.com/enovikov11-ai-agent/tigor-no-ai.git` — push feature branches (fork)
 - **NO Forgejo remote** — tigor-no-ai exists only on GitHub
-- **Worktrees**: `/opt/git/tigor-no-ai.worktrees/<name>/`
+- **Worktrees**: `/home/nixos/tigor-no-ai.worktrees/<name>/`
 - **.gitignore**: `**/README.md` and `**/README-tech.md` (AI files managed in tigor-ai)
 
 ## GitHub Identity
