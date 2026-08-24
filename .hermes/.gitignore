@@ -1,18 +1,53 @@
+# Git-track only config, skills, scripts, dashboards, cron, memories
+
+# Default: ignore everything
 *
 
+# Track config
 !config.yaml
 !SOUL.md
 !.gitignore
+
+# Track tigor skills (persistent)
 !skills/
 !skills/tigor/
 !skills/tigor/**
 !skills/tigor/SKILL.md
+
+# Track scripts
 !scripts/
 !scripts/**
 scripts/*.png
+
+# Track dashboards
 !dashboards/
 !dashboards/**
+
+# Track cron
 !cron/
 !cron/jobs.json
+
+# Track memories
 !memories/
 !memories/MEMORY.md
+
+# ── Runtime files (never track) ──
+*.db
+*.db-shm
+*.db-wal
+*.lock
+*.pid
+*.etag
+**/cache/**
+**/logs/**
+**/bin/**
+**/backups/**
+**/audio_cache/**
+**/image_cache/**
+**/home/**
+**/hooks/**
+**/kanban/**
+**/lazy-packages/**
+**/credentials/**
+gateway_state.json
+gateway-starts.log
