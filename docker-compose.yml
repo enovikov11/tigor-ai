@@ -46,23 +46,19 @@ services:
     restart: unless-stopped
     volumes:
       - /home/nixos/tigor-ai/.hermes:/opt/data
-      - /home/nixos/tigor-ai:/home/nixos/tigor-ai
-      - /home/nixos/tigor-no-ai:/home/nixos/tigor-no-ai
       - /home/nixos/.ssh:/home/nixos/.ssh:ro
     ports:
       - "9119:9119"
     environment:
       HERMES_DASHBOARD: "1"
-    extra_hosts:
-      - "host.containers.internal:host-gateway"
     command: ["gateway", "run"]
 
-  caddy:
-    container_name: caddy
-    image: docker.io/library/caddy:2
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile
-      - /home/nixos/tigor-ai.public-for-http:/srv/data
-      - /home/nixos/pages-data/caddy-data:/data
-      - /home/nixos/pages-data/caddy-config:/config
-    restart: unless-stopped
+  # caddy:
+  #   container_name: caddy
+  #   image: docker.io/library/caddy:2
+  #   volumes:
+  #     - ./Caddyfile:/etc/caddy/Caddyfile
+  #     - /home/nixos/tigor-ai.public-for-http:/srv/data
+  #     - /home/nixos/pages-data/caddy-data:/data
+  #     - /home/nixos/pages-data/caddy-config:/config
+  #   restart: unless-stopped
