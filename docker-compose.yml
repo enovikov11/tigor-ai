@@ -48,7 +48,7 @@ services:
     user: "0:0"
     volumes:
       - /home/nixos/tigor-ai/.hermes:/opt/data
-      - /home/nixos/.ssh:/opt/hermes/.ssh:ro
+      - /home/nixos/.ssh:/opt/data/.ssh:ro
     ports:
       - "9119:9119"
     environment:
