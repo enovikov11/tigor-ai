@@ -97,7 +97,7 @@ These live in `/opt/data/` (persistent container volume) and are NOT in the git 
 **tigor-ai is public on GitHub.** Every commit must be inspected before push:
 - Check `.git status --short` — verify nothing unexpected is staged
 - Run `git diff --cached` — visually scan for secrets, keys, passwords
-- **config.yaml, .gitignore, MEMORY.md** have "DO NOT EDIT" headers — respect them. MEMORY.md is fair game (edit and commit freely)
+- **config.yaml, .gitignore** have "DO NOT EDIT" headers — respect them
 - If something secret leaks into a commit: `git reset HEAD~1`, fix, recommit
 
 ## Overview
