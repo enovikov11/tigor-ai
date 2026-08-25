@@ -98,6 +98,23 @@ These live in `/opt/data/` (persistent container volume) and are NOT in the git 
 - Check `.git status --short` — verify nothing unexpected is staged
 - Run `git diff --cached` — visually scan for secrets, keys, passwords
 - **NEVER change `.gitignore`** without a clear, justified reason
+
+### Critical files — never edit without explicit user request
+
+These files control Hermes behavior. Unauthorized changes break things:
+
+| File | Risk |
+|---|---|
+| `.hermes/config.yaml` | Changes agent behavior, model routing, security settings |
+| `.hermes/memories/MEMORY.md` | Changes persistent instructions injected into every session |
+| `.hermes/.gitignore` | Controls what gets committed — can leak secrets or lose state |
+
+**Before editing any of these: ask the user. Wait for approval.**
+
+### Push rule — never push to main directly
+
+All changes to both repos go through feature branches + PR. Even trivial fixes.
+The only exception is cron jobs that commit explicitly approved content (e.g. daily snapshots).
 - If something secret leaks into a commit: `git reset HEAD~1`, fix, recommit
 
 ## Overview
