@@ -29,7 +29,7 @@
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-08-18T23:18:37.017944+00:00",
-      "next_run_at": "2026-08-25T03:00:00+00:00",
+      "next_run_at": "2026-08-26T03:00:00+00:00",
       "last_run_at": "2026-08-24T19:45:31.983106+00:00",
       "last_status": "ok",
       "last_error": null,
@@ -46,7 +46,10 @@
         "terminal"
       ],
       "workdir": null,
-      "fire_claim": null,
+      "fire_claim": {
+        "at": "2026-08-25T03:00:53.162794+00:00",
+        "by": "b058c56a3c6c:129:abbdb856456d41b28f989216bd7e3a7c"
+      },
       "failure_streak": 0
     },
     {
@@ -100,5 +103,5 @@
       "workdir": null
     }
   ],
-  "updated_at": "2026-08-24T19:45:31.983924+00:00"
+  "updated_at": "2026-08-25T03:00:53.163165+00:00"
 }
