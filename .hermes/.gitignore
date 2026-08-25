@@ -1,3 +1,7 @@
+# DO NOT EDIT without explicit user request
+# Rule: deny-all (*) + allow concrete exceptions (! path)
+# Do NOT add redundant deny rules — * already covers everything
+# Exception: scripts/*.png is an additional deny on an already-allowed path
 *
 
 !config.yaml
