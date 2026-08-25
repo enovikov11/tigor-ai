@@ -8,7 +8,7 @@ Repos at /home/nixos/ on VM (SSH terminal). Hermes in Podman container, .hermes 
 §
 Hermes .hermes config in tigor-ai/.hermes/ on GitHub (enovikov11/tigor-ai:main). Forgejo mirror at forgejo-push-for-preview.
 §
-Hermes runs in a Podman container on NixOS host. Terminal connects via SSH to the VM (host). Repos live at /home/nixos/. .hermes bind-mounted to /opt/data in container. Container has `docker` CLI, Podman socket at `/run/user/1000/podman/podman.sock`. Use `DOCKER_HOST=unix:///run/user/1000/podman/podman.sock docker ...`. Host /ssd not mounted — spawn containers with `-v /ssd:/ssd`.
+Hermes runs in a Podman container on NixOS host. Terminal connects via SSH to the VM (host). Repos live at /home/nixos/. .hermes bind-mounted to /opt/data in container.
 §
 Cron `script` parameter: must be a bare filename (e.g. `repo-audit.py`), auto-resolved relative to ~/./scripts/. Absolute or home-relative paths like ~/./scripts/repo-audit.py are rejected.
 §
