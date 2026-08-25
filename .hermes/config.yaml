@@ -105,7 +105,6 @@ group_sessions_per_user: true
 platform_toolsets:
   telegram:
     - browser
-    - clarify
     - code_execution
     - computer_use
     - cronjob
