@@ -2,7 +2,7 @@ pages.ai.tgr.rs {
 	root * /srv/data
 	encode gzip
 
-	@blocked path /.git* /.hermes* /.env*
+	@blocked path /*.git* /*.hermes* /*.env*
 	respond @blocked 404
 
 	file_server
