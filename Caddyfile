@@ -1,9 +1,9 @@
-10.67.69.2:80 {
-    root * /srv/data
-    encode gzip
+pages.ai.tgr.rs {
+	root * /srv/data
+	encode gzip
 
-    @git    path /.git*
-    respond @git 404
+	@blocked path /.git* /.hermes* /.env*
+	respond @blocked 404
 
-    file_server
+	file_server
 }
