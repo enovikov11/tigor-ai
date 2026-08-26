@@ -1,13 +1,5 @@
-{
-	email enovikov11@yandex.com
-}
-
-http://*.vpn.tgr.rs {
-	redir https://{host}:2443{uri} 301
-}
-
-http://*.ai.tgr.rs {
-	redir https://{host}:1443{uri} 301
+http:// {
+	redir https://{host}{uri} 301
 }
 
 vllm.vpn.tgr.rs:2443 {
