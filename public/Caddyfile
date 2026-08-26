@@ -1,0 +1,11 @@
+# public- service: static *.ai.tgr.rs content (no internet egress).
+# Internal only — the gateway (caddy) routes *.ai.tgr.rs to this container.
+:8080 {
+	root * /srv/data
+	encode gzip
+
+	@blocked path /.git* /.hermes* /.env*
+	respond @blocked 404
+
+	file_server
+}

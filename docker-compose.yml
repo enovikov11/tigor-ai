@@ -1,6 +1,50 @@
+# Root tigr.rs gateway stack (VM 10.67.69.2).
+#
+# Networks:
+#   vpn-only — internal: true (NO internet egress). vpn-only- services:
+#              vpn-only-vllm, vpn-only-forgejo, hermes.
+#   public   — internal: true (NO internet egress). public- services:
+#              public-pages (*.ai.tgr.rs content, served on :1080 and :1433).
+#   default  — bridge with NAT egress. Only caddy and hermes join it, so only
+#              they can reach the internet.
+#
+# Container IPs are pinned (podman-compose honours ipv4_address) so the
+# gateway can reach upstreams across networks without DNS.
+#
+# Ports (host):
+#   80   — HTTPS redirect only (certs are DNS-01, not HTTP-01)
+#   443  — vpn-only services by path: /vllm /forgejo /hermes
+#   81   — vpn-only-vllm,   plain HTTP
+#   82   — vpn-only-forgejo, plain HTTP
+#   83   — hermes,          plain HTTP
+#   1080 — public (*.ai.tgr.rs), HTTPS
+#   1433 — public (*.ai.tgr.rs), HTTPS (alt port)
+#   1443 — reserved: outside-IP 443 proxying, implemented separately
+#
+# public- prefix:  reachable via *.ai.tgr.rs (public network, no internet)
+# vpn-only- prefix: reachable via vpn.tgr.rs paths (vpn-only network, no internet)
+
+networks:
+  default:
+  vpn-only:
+    driver: bridge
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.67.69.0/24
+          gateway: 172.67.69.1
+  public:
+    driver: bridge
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.67.70.0/24
+          gateway: 172.67.70.1
+
 services:
-  vllm:
-    container_name: vllm
+  vpn-only-vllm:
+    # vpn-only- service → https://vpn.tgr.rs/vllm or http://10.67.69.2:81
+    container_name: vpn-only-vllm
     image: docker.io/vllm/vllm-openai:nightly
     restart: unless-stopped
     devices:
@@ -14,8 +58,9 @@ services:
       - /ssd/public/internet/huggingface.co:/huggingface.co:ro
       - /home/nixos/vllm-cache:/root/.cache/vllm
     shm_size: 16g
-    ports:
-      - "8000:8000"
+    networks:
+      vpn-only:
+        ipv4_address: 172.67.69.10
     command: >
       /huggingface.co/Qwen/Qwen3.8-27B-FP8
       --served-model-name Qwen3.8-27B-FP8
@@ -41,16 +86,73 @@ services:
       --enable-prefix-caching
       --performance-mode interactivity
 
-  forgejo:
-    container_name: forgejo
+  vpn-only-forgejo:
+    # vpn-only- service → https://vpn.tgr.rs/forgejo or http://10.67.69.2:82
+    # Set ROOT_URL=https://vpn.tgr.rs/forgejo/ so it builds correct paths.
+    container_name: vpn-only-forgejo
     image: codeberg.org/forgejo/forgejo:16
     restart: unless-stopped
-    ports:
-      - "3000:3000"
     volumes:
       - /home/nixos/forgejo-data:/data
+    networks:
+      vpn-only:
+        ipv4_address: 172.67.69.20
+
+  public-pages:
+    # public- service → https://*.ai.tgr.rs:1080 and :1433 (no internet egress)
+    container_name: public-pages
+    image: docker.io/library/caddy:2
+    restart: unless-stopped
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - ./public/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./public/data:/srv/data:ro
+    networks:
+      public:
+        ipv4_address: 172.67.70.10
+
+  caddy:
+    # Gateway. Custom build (./caddy/Dockerfile): stock caddy:2 has no ACME
+    # DNS-01 providers; this one adds the PowerDNS provider used to obtain
+    # the wildcard certs (*.vpn.tgr.rs, *.ai.tgr.rs) via the VPS PowerDNS
+    # API. DNS API token injected from .env (PDNS_API_TOKEN=...).
+    container_name: caddy
+    build: ./caddy
+    restart: unless-stopped
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    security_opt:
+      - no-new-privileges:true
+    env_file:
+      - .env
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - /home/nixos/pages-data/caddy-data:/data
+      - /home/nixos/pages-data/caddy-config:/config
+    ports:
+      - "80:80"      # HTTPS redirect
+      - "443:443"    # vpn-only by path: /vllm /forgejo /hermes
+      - "81:81"      # vpn-only-vllm, plain HTTP
+      - "82:82"      # vpn-only-forgejo, plain HTTP
+      - "83:83"      # hermes, plain HTTP
+      - "1080:1080"  # public *.ai.tgr.rs, HTTPS
+      - "1433:1433"  # public *.ai.tgr.rs, HTTPS (alt port)
+      # 1443 reserved for outside-IP 443 proxying (implemented separately)
+    networks:
+      - default  # internet path (ACME) — only egress besides hermes
+      - vpn-only
+      - public
 
   hermes:
+    # Needs public internet (model APIs); vpn-only so it can reach
+    # vpn-only-vllm / vpn-only-forgejo.
     container_name: hermes
     image: docker.io/nousresearch/hermes-agent
     restart: unless-stopped
@@ -64,24 +166,7 @@ services:
     environment:
       HERMES_DASHBOARD: "1"
     command: ["gateway", "run"]
-
-  caddy:
-    container_name: caddy
-    image: docker.io/library/caddy:2
-    restart: unless-stopped
-    cap_drop:
-      - ALL
-    cap_add:
-      - NET_BIND_SERVICE
-    security_opt:
-      - no-new-privileges:true
-    environment:
-      - ACME_AGREE=true
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile
-      - /home/nixos/tigor-ai.worktrees/public-http-pages:/srv/data:ro
-      - /home/nixos/pages-data/caddy-data:/data
-      - /home/nixos/pages-data/caddy-config:/config
-    ports:
-      - "80:80"
-      - "443:443" 
+    networks:
+      default:
+      vpn-only:
+        ipv4_address: 172.67.69.30

@@ -1,9 +1,88 @@
-pages.ai.tgr.rs {
-	root * /srv/data
-	encode gzip
+# Gateway for 10.67.69.2 (tigr.rs VM).
+#
+#   80    — HTTPS redirect (certs are DNS-01, not HTTP-01)
+#   443   — vpn-only services by path: /vllm /forgejo /hermes (wildcard cert)
+#   81    — vpn-only-vllm,   plain HTTP
+#   82    — vpn-only-forgejo, plain HTTP
+#   83    — hermes,          plain HTTP
+#   1080  — public services (*.ai.tgr.rs), HTTPS (wildcard cert)
+#   1433  — public services (*.ai.tgr.rs), HTTPS (wildcard cert, alt port)
+#
+# Certs: Let's Encrypt wildcard certs for *.vpn.tgr.rs and *.ai.tgr.rs
+# (plus their apexes) via DNS-01. The tgr.rs zone is at unlimited.rs;
+# ai.tgr.rs and vpn.tgr.rs are delegated (NS) to this VPS's PowerDNS,
+# which Caddy edits through its API (10.67.69.1:8081, token-authenticated,
+# reachable only from the VPN).
+#
+# Pinned upstream IPs (see docker-compose.yml; no cross-net DNS):
+#   vpn-only-vllm 172.67.69.10:8000   vpn-only-forgejo 172.67.69.20:3000
+#   hermes 172.67.69.30:9119          public-pages 172.67.70.10:8080
+#
+# Upstreams must expect the path prefix in their own URLs (e.g. forgejo
+# ROOT_URL=https://vpn.tgr.rs/forgejo/) — the gateway strips the prefix.
 
-	@blocked path /*.git* /*.hermes* /*.env*
-	respond @blocked 404
+{
+	# ACME account contact (fill in):
+	# email you@example.com
+}
 
-	file_server
+# 80 — everything to https
+http:// {
+	redir https://{host}{uri} 301
+}
+
+# 80 — *.ai.tgr.rs: send to its HTTPS ports (1080/1433), not 443
+http://ai.tgr.rs, http://*.ai.tgr.rs {
+	redir https://{host}:1080{uri} 301
+}
+
+# --- vpn-only (no-internet) network, path-based over TLS ---
+vpn.tgr.rs, *.vpn.tgr.rs {
+	tls {
+		dns powerdns {
+			server_url http://10.67.69.1:8081
+			server_id localhost
+			api_token {env.PDNS_API_TOKEN}
+		}
+	}
+	handle /vllm* {
+		uri strip_prefix /vllm
+		reverse_proxy 172.67.69.10:8000
+	}
+	handle /forgejo* {
+		uri strip_prefix /forgejo
+		reverse_proxy 172.67.69.20:3000
+	}
+	handle /hermes* {
+		uri strip_prefix /hermes
+		reverse_proxy 172.67.69.30:9119
+	}
+	handle {
+		respond "VPN gateway — /vllm /forgejo /hermes (plain HTTP on :81 :82 :83)"
+	}
+}
+
+# --- vpn-only, plain HTTP (no TLS), one port per service ---
+:81 {
+	reverse_proxy 172.67.69.10:8000
+}
+:82 {
+	reverse_proxy 172.67.69.20:3000
+}
+:83 {
+	reverse_proxy 172.67.69.30:9119
+}
+
+# --- public (no-internet) network: *.ai.tgr.rs static content ---
+# Served on both 1080 and 1433, same wildcard cert.
+https://ai.tgr.rs:1080, https://*.ai.tgr.rs:1080,
+https://ai.tgr.rs:1433, https://*.ai.tgr.rs:1433 {
+	tls {
+		dns powerdns {
+			server_url http://10.67.69.1:8081
+			server_id localhost
+			api_token {env.PDNS_API_TOKEN}
+		}
+	}
+	reverse_proxy 172.67.70.10:8080
 }
