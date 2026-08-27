@@ -1,4 +1,20 @@
-pages.ai.tgr.rs {
+http:// {
+	redir https://{host}{uri} 301
+}
+
+vllm.vpn.tgr.rs:2443 {
+	reverse_proxy vllm:8000
+}
+
+forgejo.vpn.tgr.rs:2443 {
+	reverse_proxy forgejo:3000
+}
+
+hermes.vpn.tgr.rs:2443 {
+	reverse_proxy hermes:9119
+}
+
+pages.ai.tgr.rs:1443 {
 	root * /srv/data
 	encode gzip
 
