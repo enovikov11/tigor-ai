@@ -13,10 +13,15 @@ tr:hover{background:#1e1e1e}
 .btn{cursor:pointer;background:#222;color:#8f8;border:none;border-radius:3px;font-family:inherit;padding:0 .5em;margin-right:.5em}
 .btn.r{float:right;margin-left:.5em;margin-right:0}
 .warn{color:#f55;font-size:1.2em}
+@keyframes spin{to{transform:rotate(360deg)}}
+#loading{position:fixed;inset:0;background:#111;display:flex;flex-direction:column;gap:14px;align-items:center;justify-content:center;z-index:10;color:#768390;font-family:monospace}
+#loading .spin{width:34px;height:34px;border:3px solid #21262d;border-top-color:#58a6ff;border-radius:50%;animation:spin .8s linear infinite}
+#loading[hidden]{display:none}
 </style></head><body>
 <h1>model sizes</h1>
 <p class="legend">&#183; ⚡ = ssd &#183; 🐢 = hdd &#183; 🐘 = 100 GB &#183; 🐭 = 10 GB (max of ssd/hdd) &#183; 🧊 = quant &#183; ❗ = file size differs between ssd/hdd &#183; round up</p>
 <div id="disks"></div>
+<div id="loading"><div class="spin"></div><div>scanning disks…</div></div>
 <div id="tbl"></div>
 <script>
 let files = [];
@@ -96,6 +101,7 @@ function build(){
   document.getElementById('tbl').innerHTML =
     '<table><thead><tr><th>path</th><th class="num">⚡ ssd GB</th><th class="num">🐢 hdd GB</th><th>size (max)</th></tr></thead><tbody>' +
     out.map(x=>x.html).join('') + '</tbody></table>';
+  document.getElementById('loading').hidden = true;
 }
 function toggle(el){
   const p = el.dataset.p;
@@ -109,10 +115,10 @@ fetch('/api/disks').then(r=>r.json()).then(dk=>{
     return '<p>'+DISK[d.disk]+' '+d.mount+': '+d.used_gb+' / '+d.total_gb+' GB ('+pct+'%)'+
       ' <span class="bar"><i style="width:'+pct+'%"></i></span></p>';
   }).join('');
-}).catch(e=>document.body.innerHTML += '<pre>'+e+'</pre>');
+}).catch(e=>{ const l=document.getElementById('loading'); l.innerHTML='<div style="color:#f55">disk info error: '+esc(String(e))+'</div>'; });
 fetch('/api/sizes').then(r=>r.json()).then(sz=>{
   files = sz.entries;
   build();
-}).catch(e=>document.body.innerHTML += '<pre>'+e+'</pre>');
+}).catch(e=>{ const l=document.getElementById('loading'); l.innerHTML='<div style="color:#f55">scan error: '+esc(String(e))+'</div>'; });
 </script>
 </body></html>
