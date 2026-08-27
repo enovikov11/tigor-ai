@@ -1,0 +1,58 @@
+services:
+  api:
+    container_name: honcho-api
+    image: localhost/honcho:latest
+    entrypoint: ["sh", "docker/entrypoint.sh"]
+    depends_on:
+      - database
+      - redis
+    ports:
+      - "8001:8000"
+    volumes:
+      - ./config.toml:/app/config.toml:ro
+    networks: [default]
+    restart: unless-stopped
+
+  deriver:
+    container_name: honcho-deriver
+    image: localhost/honcho:latest
+    entrypoint: ["/app/.venv/bin/python", "-m", "src.deriver"]
+    depends_on:
+      - database
+      - redis
+      - api
+    volumes:
+      - ./config.toml:/app/config.toml:ro
+    networks: [default]
+    restart: unless-stopped
+
+  database:
+    container_name: honcho-db
+    image: docker.io/pgvector/pgvector:pg15
+    command: ["postgres", "-c", "max_connections=200"]
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - pgdata:/var/lib/postgresql/data/
+    networks: [default]
+    restart: unless-stopped
+
+  redis:
+    container_name: honcho-redis
+    image: docker.io/library/redis:8.2
+    volumes:
+      - redis-data:/data
+    networks: [default]
+    restart: unless-stopped
+
+networks:
+  default:
+    name: tigor-ai_default
+    external: true
+
+volumes:
+  pgdata:
+  redis-data:

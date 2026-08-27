@@ -1,0 +1,139 @@
+# Honcho local runtime config — wired to the tigor-ai_default `vllm` service.
+#
+# All non-embedding LLM modules (deriver, summary, dialectic, dream) use the
+# global OpenAI transport, which falls back to LLM.OPENAI_BASE_URL /
+# LLM.OPENAI_API_KEY when a module sets no per-module override. That global
+# client is pointed at the local vLLM server (Qwen3.8-27B-FP8).
+#
+# Embeddings: vLLM serves chat/completions only, so embeddings come from a
+# separate local TEI service (honcho-embed, BAAI/bge-small-en-v1.5, 384 dims)
+# on the same podman network. Semantic search and deriver dedup rely on it.
+
+[app]
+LOG_LEVEL = "INFO"
+PERFORMANCE_LOG_FORMAT = "compact"
+EMBED_MESSAGES = true
+
+[db]
+CONNECTION_URI = "postgresql+psycopg://postgres:postgres@database:5432/postgres"
+SCHEMA = "public"
+POOL_PRE_PING = true
+POOL_SIZE = 10
+MAX_OVERFLOW = 20
+POOL_TIMEOUT = 30
+POOL_RECYCLE = 300
+CONNECT_TIMEOUT_SECONDS = 10
+
+[auth]
+USE_AUTH = false
+
+[sentry]
+ENABLED = false
+
+# Global OpenAI-compatible transport -> local vLLM.
+# Every module without a per-module base_url/api_key reuses this client.
+[llm]
+OPENAI_API_KEY = "vllm-local"
+OPENAI_BASE_URL = "http://vllm:8000/v1"
+DEFAULT_MAX_TOKENS = 4096
+MAX_TOOL_OUTPUT_CHARS = 10000
+
+# vLLM (Qwen) has no embeddings endpoint; unused while EMBED_MESSAGES=false.
+[embedding]
+VECTOR_DIMENSIONS = 384
+
+[embedding.model_config]
+transport = "openai"
+model = "bge-small-en-v1.5"
+
+[deriver]
+ENABLED = true
+WORKERS = 4
+FLUSH_ENABLED = true
+MAX_INPUT_TOKENS = 25000
+
+[deriver.model_config]
+transport = "openai"
+model = "Qwen3.8-27B-FP8"
+temperature = 0.0
+
+[deriver.model_config.overrides]
+provider_params.extra_body.chat_template_kwargs.enable_thinking = false
+
+[peer_card]
+ENABLED = true
+
+[dialectic]
+MAX_OUTPUT_TOKENS = 4096
+MAX_INPUT_TOKENS = 65536
+HISTORY_TOKEN_LIMIT = 8192
+
+[dialectic.levels.minimal.model_config]
+transport = "openai"
+model = "Qwen3.8-27B-FP8"
+[dialectic.levels.minimal.model_config.overrides]
+provider_params.extra_body.chat_template_kwargs.enable_thinking = false
+
+[dialectic.levels.low.model_config]
+transport = "openai"
+model = "Qwen3.8-27B-FP8"
+[dialectic.levels.low.model_config.overrides]
+provider_params.extra_body.chat_template_kwargs.enable_thinking = false
+
+[dialectic.levels.medium.model_config]
+transport = "openai"
+model = "Qwen3.8-27B-FP8"
+[dialectic.levels.medium.model_config.overrides]
+provider_params.extra_body.chat_template_kwargs.enable_thinking = false
+
+[dialectic.levels.high.model_config]
+transport = "openai"
+model = "Qwen3.8-27B-FP8"
+[dialectic.levels.high.model_config.overrides]
+provider_params.extra_body.chat_template_kwargs.enable_thinking = false
+
+[dialectic.levels.max.model_config]
+transport = "openai"
+model = "Qwen3.8-27B-FP8"
+[dialectic.levels.max.model_config.overrides]
+provider_params.extra_body.chat_template_kwargs.enable_thinking = false
+
+[summary]
+ENABLED = true
+
+[summary.model_config]
+transport = "openai"
+model = "Qwen3.8-27B-FP8"
+[summary.model_config.overrides]
+provider_params.extra_body.chat_template_kwargs.enable_thinking = false
+
+[dream]
+ENABLED = true
+
+[dream.deduction_model_config]
+transport = "openai"
+model = "Qwen3.8-27B-FP8"
+[dream.deduction_model_config.overrides]
+provider_params.extra_body.chat_template_kwargs.enable_thinking = false
+
+[dream.induction_model_config]
+transport = "openai"
+model = "Qwen3.8-27B-FP8"
+[dream.induction_model_config.overrides]
+provider_params.extra_body.chat_template_kwargs.enable_thinking = false
+
+[vector_store]
+TYPE = "pgvector"
+
+[cache]
+ENABLED = true
+URL = "redis://redis:6379/0?suppress=true"
+
+[telemetry]
+ENABLED = false
+
+[metrics]
+ENABLED = false
+
+[embedding.model_config.overrides]
+base_url = "http://honcho-embed:80/v1"
