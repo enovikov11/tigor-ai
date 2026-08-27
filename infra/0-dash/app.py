@@ -60,19 +60,28 @@ td:nth-child(2),th:nth-child(2){text-align:right}
 td:nth-child(3){white-space:nowrap}
 tr:hover{background:#1e1e1e}
 .legend{color:#999}
+.cp{cursor:pointer;background:#222;color:#8f8;border:none;border-radius:3px;font-family:inherit;padding:0 .5em;margin-left:.5em}
 </style></head><body>
 <h1>model sizes</h1>
 <p class="legend" id="legend"></p>
 <table><thead><tr><th>path</th><th>GB</th><th></th></tr></thead>
 <tbody id="rows"></tbody></table>
 <script>
-const BIG = '\\u{1F7E5}', SMALL = '\\u{1F534}';
-document.getElementById('legend').innerHTML = BIG+' = 100 GB &#183; '+SMALL+' = 10 GB &#183; round up';
+const DISK = {ssd: '⚡', hdd: '🐢'}, Q = '🧊';
+document.getElementById('legend').innerHTML = DISK.ssd+' ssd &#183; '+DISK.hdd+' hdd &#183; 🐘 = 100 GB &#183; 🐭 = 10 GB &#183; '+Q+' = quant &#183; round up';
+function copy(el){
+  const p = el.dataset.p;
+  const done = () => { el.textContent='✓'; setTimeout(()=>el.textContent='⧉',1000); };
+  const fb = () => { const t=document.createElement('textarea'); t.value=p; document.body.appendChild(t); t.select(); document.execCommand('copy'); t.remove(); done(); };
+  if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(p).then(done).catch(fb); } else { fb(); }
+}
 fetch('/api/sizes').then(r=>r.json()).then(d=>{
   document.getElementById('rows').innerHTML = d.entries.map(e=>{
     const gb = e.bytes/1073741824;
-    return '<tr><td>'+e.path+'</td><td>'+gb.toFixed(2)+'</td><td>'+
-      BIG.repeat(Math.ceil(gb/100))+SMALL.repeat(Math.ceil(gb/10))+'</td></tr>';
+    const b = Math.ceil(gb/10);
+    const disk = e.path.split('/')[0], rest = e.path.split('/').slice(1).join('/');
+    return '<tr><td>'+DISK[disk]+' '+rest+(rest.split('/').length>2?' '+Q:'')+'</td><td>'+gb.toFixed(2)+'</td><td>'+
+      '🐘'.repeat(Math.floor(b/10))+'🐭'.repeat(b%10)+'</td><td><button class="cp" data-p="'+e.path+'" onclick="copy(this)">⧉</button></td></tr>';
   }).join('');
 }).catch(e=>document.getElementById('rows').innerHTML='<tr><td>'+e+'</td></tr>');
 </script>
