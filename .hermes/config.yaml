@@ -59,7 +59,7 @@ prompt_caching:
   cache_ttl: 5m
 display:
   compact: false
-  busy_input_mode: interrupt
+  busy_input_mode: queue
   bell_on_complete: false
   show_reasoning: false
   background_process_notifications: none
