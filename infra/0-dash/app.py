@@ -1,33 +1,48 @@
+import re
 import subprocess
 
 from fastapi import FastAPI
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse
 
-ROOTS = {
-    "hdd": "/hdd/public/internet",
-    "ssd": "/ssd/public/internet",
-}
+ROOTS = [
+    ("ssd", "/ssd/public/internet/huggingface*"),
+    ("hdd", "/hdd/public/internet/huggingface*"),
+]
 
-CMD = "find ./huggingface* -mindepth 2 -maxdepth 2 -type d -exec du -s {} +"
+CMD = "find " + " ".join(r for _, r in ROOTS) + " -type f -exec du -b {} +"
+
+QUANT = re.compile(r"(?<![A-Za-z0-9])((?:UD-)?(?:MXFP4|I?Q\d+|F\d+|BF16|FP16|FP32)(?:_[A-Z0-9]+)*)", re.I)
 
 app = FastAPI()
 
 
-@app.get("/api/{disk}")
-def sizes(disk: str):
-    root = ROOTS.get(disk)
-    if root is None:
-        return JSONResponse({"error": "unknown disk, use hdd or ssd"}, status_code=404)
-    p = subprocess.run(
-        ["sh", "-c", CMD], cwd=root, capture_output=True, text=True, timeout=600
-    )
-    rows = []
+def quant_of(path: str) -> str:
+    if not path.lower().endswith(".gguf"):
+        return ""
+    parts = path.split("/")
+    for s in (parts[-1], parts[-2]):
+        m = QUANT.search(s)
+        if m:
+            return m.group(1).upper()
+    return ""
+
+
+@app.get("/api/sizes")
+def sizes():
+    p = subprocess.run(["sh", "-c", CMD], capture_output=True, text=True, timeout=600)
+    total = {}
     for line in p.stdout.splitlines():
-        parts = line.split("\t", 1)
-        if len(parts) == 2:
-            rows.append({"size_kb": int(parts[0]), "path": parts[1].lstrip("./")})
-    rows.sort(key=lambda r: r["size_kb"], reverse=True)
-    return {"disk": disk, "root": root, "entries": rows}
+        size, path = line.split("\t", 1)
+        disk = "ssd" if path.startswith("/ssd/") else "hdd"
+        parts = path.split("/internet/", 1)[1].split("/", 3)
+        model = "/".join(parts[1:3]) if len(parts) >= 3 else parts[-1]
+        key = (disk, model, quant_of(path))
+        total[key] = total.get(key, 0) + int(size)
+    rows = []
+    for (disk, model, q), b in total.items():
+        rows.append({"path": disk + "/" + model + ("/" + q if q else ""), "bytes": b})
+    rows.sort(key=lambda r: r["bytes"], reverse=True)
+    return {"entries": rows}
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -36,34 +51,29 @@ def index():
 
 
 HTML = """<!doctype html>
-<html><head><meta charset="utf-8"><title>HF sizes</title>
+<html><head><meta charset="utf-8"><title>sizes</title>
 <style>
 body{font-family:monospace;background:#111;color:#eee;padding:2rem}
-button{margin-right:1em;padding:.4em 1em;font-family:inherit}
 table{border-collapse:collapse;width:100%}
-td,th{padding:.35em .8em;border-bottom:1px solid #333;text-align:right}
-td:first-child,th:first-child{text-align:left}
+td,th{padding:.35em .8em;border-bottom:1px solid #333}
+td:nth-child(2),th:nth-child(2){text-align:right}
+td:nth-child(3){white-space:nowrap}
 tr:hover{background:#1e1e1e}
+.legend{color:#999}
 </style></head><body>
-<h1>huggingface* sizes</h1>
-<button onclick="load('hdd')">/hdd</button>
-<button onclick="load('ssd')">/ssd</button>
-<p id="err"></p>
-<table><thead><tr><th>path</th><th>size</th><th>GB</th></tr></thead>
+<h1>model sizes</h1>
+<p class="legend" id="legend"></p>
+<table><thead><tr><th>path</th><th>GB</th><th></th></tr></thead>
 <tbody id="rows"></tbody></table>
 <script>
-async function load(disk){
-  document.getElementById('err').textContent = 'loading ' + disk + '...';
-  try{
-    const r = await fetch('/api/' + disk);
-    const d = await r.json();
-    if(d.error){document.getElementById('err').textContent = d.error;return;}
-    document.getElementById('err').textContent = d.root + ' (' + d.entries.length + ' dirs)';
-    const gb = 1024*1024;
-    document.getElementById('rows').innerHTML = d.entries.map(e =>
-      '<tr><td>' + e.path + '</td><td>' + e.size_kb + ' KB</td><td>' +
-      (e.size_kb/gb).toFixed(2) + '</td></tr>').join('');
-  }catch(e){document.getElementById('err').textContent = String(e);}
-}
+const BIG = '\\u{1F7E5}', SMALL = '\\u{1F534}';
+document.getElementById('legend').innerHTML = BIG+' = 100 GB &#183; '+SMALL+' = 10 GB &#183; round up';
+fetch('/api/sizes').then(r=>r.json()).then(d=>{
+  document.getElementById('rows').innerHTML = d.entries.map(e=>{
+    const gb = e.bytes/1073741824;
+    return '<tr><td>'+e.path+'</td><td>'+gb.toFixed(2)+'</td><td>'+
+      BIG.repeat(Math.ceil(gb/100))+SMALL.repeat(Math.ceil(gb/10))+'</td></tr>';
+  }).join('');
+}).catch(e=>document.getElementById('rows').innerHTML='<tr><td>'+e+'</td></tr>');
 </script>
 </body></html>"""
