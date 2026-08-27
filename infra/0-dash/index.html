@@ -1,30 +1,63 @@
 <!doctype html>
-<html><head><meta charset="utf-8"><title>sizes</title>
+<html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>sizes</title>
 <style>
-body{font-family:monospace;background:#111;color:#eee;padding:2rem}
+body{font-family:monospace;background:#111;color:#eee;padding:2rem;margin:0}
 table{border-collapse:collapse;width:100%}
 td,th{padding:.35em .8em;border-bottom:1px solid #333}
 .num{text-align:right}
 .ic{white-space:nowrap}
 tr:hover{background:#1e1e1e}
+.nm{word-break:break-word;min-width:0}
 .legend{color:#999}
-.bar{background:#333;border-radius:3px;height:.9em;overflow:hidden;display:inline-block;width:20em;vertical-align:middle}
+details.legendwrap summary{color:#999;cursor:pointer}
+.bar{background:#333;border-radius:3px;height:.9em;overflow:hidden;display:inline-block;width:20em;max-width:100%;vertical-align:middle}
 .bar i{display:block;height:100%;background:#4a4}
-.btn{cursor:pointer;background:#222;color:#8f8;border:none;border-radius:3px;font-family:inherit;padding:0 .5em;margin-right:.5em}
+.btn{cursor:pointer;background:#222;color:#8f8;border:none;border-radius:3px;font-family:inherit;padding:.15em .5em;margin-right:.5em}
 .btn.r{float:right;margin-left:.5em;margin-right:0}
 .warn{color:#f55;font-size:1.2em}
-.disc{color:#fa0;font-size:1.1em}
-.rep...5em;font-size:.9em}
-.lvl{color:#999;margin:.5em 0}
-.lvl label{margin-right:1.2em;cursor:pointer}
+.disc{color:#fa0;font-size:1.1em;white-space:nowrap}
+.repotbl{margin-top:.5rem}
+.fresh{color:#4a4}.stale{color:#f80}.none{color:#666}
+.mt{color:#f55;margin-left:.5em;font-size:.9em}
 .lvl input{vertical-align:middle}
+.sl{display:none;color:#788;text-transform:uppercase;font-size:.75em;margin-right:.3em}
 @keyframes spin{to{transform:rotate(360deg)}}
 #loading{position:fixed;inset:0;background:#111;display:flex;flex-direction:column;gap:14px;align-items:center;justify-content:center;z-index:10;color:#768390;font-family:monospace}
 #loading .spin{width:34px;height:34px;border:3px solid #21262d;border-top-color:#58a6ff;border-radius:50%;animation:spin .8s linear infinite}
 #loading[hidden]{display:none}
+@media (max-width:640px){
+  body{padding:.8rem}
+  h1{font-size:1.25rem}
+  .lvl{display:flex;flex-wrap:wrap;gap:.2em .9em}
+  .lvl label{margin-right:0}
+  .bar{width:9em}
+  .btn{padding:.45em .8em;font-size:1em;min-width:42px;min-height:42px;display:inline-flex;align-items:center;justify-content:center}
+  .sl{display:inline}
+  /* model table: rows become cards, stat cells form a 3-col strip */
+  table,tbody,td{display:block;width:100%}
+  thead{display:none}
+  #tbl tr{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0;border:1px solid #2c3340;border-radius:10px;margin-bottom:.6rem;overflow:hidden}
+  #tbl tr:hover{background:#161b22}
+  #tbl td{border-bottom:none}
+  #tbl td:first-child{grid-column:1/-1;padding:.7rem .8rem .45rem}
+  #tbl td.num,#tbl td.ic{padding:.55rem .6rem;border-top:1px solid #222831}
+  #tbl td.num{text-align:center;white-space:nowrap}
+  #tbl td.ic{justify-self:center;min-width:0;white-space:normal}
+  .sz{display:block;line-height:1.2;font-size:.85em;overflow-wrap:anywhere}
+  /* repos: rows become stacked cards */
+  .repotbl, .repotbl tbody, .repotbl td{display:block;width:100%}
+  .repotbl thead{display:none}
+  .repotbl tr{display:block;border:1px solid #2c3340;border-radius:10px;margin-bottom:.6rem;overflow:hidden}
+  .repotbl td{border-bottom:1px solid #222831;padding:.5rem .8rem}
+  .repotbl td:last-child{border-bottom:none}
+}
 </style></head><body>
 <h1>model sizes</h1>
-<p class="legend">&#183; &#9889; = ssd &#183; &#128034; = hdd &#183; &#128032; = 100 GB &#183; &#128021; = 10 GB (max of ssd/hdd, round up) &#183; &#129482; = quant &#183; &#10067; = file size differs between ssd/hdd &#183; &#9888; = file(s) present on one disk only &#183; &#8852; = expand &#183; &#10513; = copy full path(s)</p>
+<details class="legendwrap" open><summary class="legend">legend</summary>
+&#9889; = ssd &#183; &#128034; = hdd &#183; &#128032; = 100 GB &#183; &#128021; = 10 GB (max of ssd/hdd, round up) &#183; &#129482; = quant &#183; &#10067; = file size differs between ssd/hdd &#183; &#9888; = file(s) present on one disk only &#183; &#8852; = expand &#183; &#10513; = copy full path(s)
+</details>
 <div id="disks"></div>
 <div class="lvl">detail:
 <label><input type="radio" name="lvl" value="0" checked onchange="setLevel(0)"> provider</label>
@@ -81,11 +114,11 @@ function build(){
     out.push(
       '<tr><td>' + (indent ? '<span style="color:#556">' + ' '.repeat(indent*2) + '</span>' : '') +
       (canExp ? '<button class="btn" data-k="' + (r.level===0?'p':'m') + '" data-p="' + encodeURIComponent(r.key) + '" onclick="toggle(this)">\u229E</button>' : '') +
-      '<span>' + esc(r.name) + (r.hasQ ? ' ' + Q : '') + '</span>' +
+      '<span class="nm">' + esc(r.name) + (r.hasQ ? ' ' + Q : '') + '</span>' +
       '<button class="btn r" data-p="' + encodeURIComponent(paths.join('\n')) + '" onclick="copy(this)">\u29C9</button></td>' +
-      '<td class="num">' + (r.ssd ? (r.ssd/GB).toFixed(1) : '\u2014') + '</td>' +
-      '<td class="num">' + (r.hdd ? (r.hdd/GB).toFixed(1) : '\u2014') + '</td>' +
-      '<td class="ic">' + icons(Math.max(r.ssd,r.hdd)/GB) +
+      '<td class="num"><span class="sl">\u26A1</span>' + (r.ssd ? (r.ssd/GB).toFixed(1) : '\u2014') + '</td>' +
+      '<td class="num"><span class="sl">\uD83D\uDC22</span>' + (r.hdd ? (r.hdd/GB).toFixed(1) : '\u2014') + '</td>' +
+      '<td class="ic"><span class="sz">' + icons(Math.max(r.ssd,r.hdd)/GB) + '</span>' +
       (r.mm ? ' <span class="warn" title="file size differs between ssd/hdd">' + WARN + '</span>' : '') +
       (r.dc ? ' <span class="disc" title="' + r.dc + ' file(s) present on one disk only">' + DISC + r.dc + '</span>' : '') +
       '</td></tr>'
