@@ -15,6 +15,98 @@ DF = "df -B1 " + " ".join(r for _, r in ROOTS)
 QUANT = re.compile(r"(?<![A-Za-z0-9])((?:UD-)?(?:MXFP4|I?Q\d+|F\d+|BF16|FP16|FP32)(?:_[A-Z0-9]+)*)", re.I)
 
 app = FastAPI()
+REPOS = {
+    "tigor-ai": "/home/nixos/tigor-ai",
+    "tigor-no-ai": "/home/nixos/tigor-no-ai",
+}
+
+
+def _git(path, *args):
+    return subprocess.run(
+        ["git", "-C", path, *args], capture_output=True, text=True, timeout=30
+    )
+
+
+def _worktree_info(wt, head, branch):
+    info = {"path": wt, "branch": branch, "head": head[:7]}
+    prunable = head.startswith("-") or not os.path.isdir(wt)
+    if prunable:
+        info["prunable"] = True
+        return info
+    if branch:
+        # find remote-tracking ref for this branch in ANY remote
+        v = _git(wt, "for-each-ref", "refs/remotes/*/" + branch, "--format=%(refname:short) %(objectname)")
+        up = None
+        if v.returncode == 0 and v.stdout.strip():
+            line = v.stdout.splitlines()[0]
+            upref, upsha = line.rsplit(" ", 1)
+            up = upsha
+            info["remote"] = upref
+        if up is None:
+            info["fresh"] = None
+        else:
+            info["fresh"] = up == head
+            if up != head:
+                c = _git(wt, "rev-list", "--left-right", "--count", head + "...refs/" + upref)
+                if c.returncode == 0:
+                    a, b = c.stdout.split()
+                    info["ahead"], info["behind"] = int(a), int(b)
+    else:
+        info["fresh"] = None
+    st = _git(wt, "status", "--porcelain")
+    if st.returncode == 0:
+        staged = unstaged = 0
+        for line in st.stdout.splitlines():
+            if len(line) < 3:
+                continue
+            x, y = line[0], line[1]
+            if x != " " and x != "?":
+                staged += 1
+            if y != " " or x == "?":
+                unstaged += 1
+        info["staged"] = staged
+        info["unstaged"] = unstaged
+    else:
+        info["staged"] = None
+        info["unstaged"] = None
+    return info
+
+
+@app.get("/api/repos")
+def api_repos():
+    out = []
+    for name, path in REPOS.items():
+        entry = {"name": name, "worktrees": []}
+        if not os.path.isdir(path):
+            entry["error"] = "not mounted"
+            out.append(entry)
+            continue
+        r = _git(path, "worktree", "list", "--porcelain")
+        if r.returncode != 0:
+            entry["error"] = r.stderr.strip() or "git failed"
+            out.append(entry)
+            continue
+        blocks = [b for b in r.stdout.split("\n\n") if b.strip()]
+        for b in blocks:
+            d = {}
+            for ln in b.splitlines():
+                if ln.startswith("worktree "):
+                    d["wt"] = ln[9:]
+                elif ln.startswith("HEAD "):
+                    d["head"] = ln[5:]
+                elif ln.startswith("branch "):
+                    d["branch"] = ln[7:].removeprefix("refs/heads/")
+                elif ln.strip() == "prunable":
+                    d["prunable"] = True
+            if "wt" not in d or "head" not in d:
+                continue
+            info = _worktree_info(d["wt"], d["head"], d.get("branch"))
+            if d.get("prunable"):
+                info["prunable"] = True
+            entry["worktrees"].append(info)
+        out.append(entry)
+    return {"repos": out}
+
 INDEX = Path(__file__).parent / "index.html"
 
 

@@ -103,6 +103,11 @@ services:
     volumes:
       - /hdd/public/internet:/hdd/public/internet:ro
       - /ssd/public/internet:/ssd/public/internet:ro
+      - /home/nixos/tigor-ai:/home/nixos/tigor-ai:ro
+      - /home/nixos/tigor-ai.worktrees:/home/nixos/tigor-ai.worktrees:ro
+      - /home/nixos/tigor-no-ai:/home/nixos/tigor-no-ai:ro
+      - /home/nixos/tigor-no-ai.worktrees:/home/nixos/tigor-no-ai.worktrees:ro
+      - /home/nixos/tigor-no-ai.pr29:/home/nixos/tigor-no-ai.pr29:ro
 
   caddy:
     container_name: caddy

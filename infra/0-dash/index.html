@@ -13,6 +13,9 @@ tr:hover{background:#1e1e1e}
 .btn{cursor:pointer;background:#222;color:#8f8;border:none;border-radius:3px;font-family:inherit;padding:0 .5em;margin-right:.5em}
 .btn.r{float:right;margin-left:.5em;margin-right:0}
 .warn{color:#f55;font-size:1.2em}
+.repotbl{margin-top:.5rem}
+.fresh{color:#4a4}.stale{color:#f80}.none{color:#666}
+.mt{color:#f55;margin-left:.5em;font-size:.9em}
 @keyframes spin{to{transform:rotate(360deg)}}
 #loading{position:fixed;inset:0;background:#111;display:flex;flex-direction:column;gap:14px;align-items:center;justify-content:center;z-index:10;color:#768390;font-family:monospace}
 #loading .spin{width:34px;height:34px;border:3px solid #21262d;border-top-color:#58a6ff;border-radius:50%;animation:spin .8s linear infinite}
@@ -23,6 +26,8 @@ tr:hover{background:#1e1e1e}
 <div id="disks"></div>
 <div id="loading"><div class="spin"></div><div>scanning disks&#8230;</div></div>
 <div id="tbl"></div>
+<h2>repos</h2>
+<div id="repos"></div>
 <script>
 let rows = [];
 const openP = new Set(), openM = new Set();
@@ -79,5 +84,32 @@ fetch('/api/sizes').then(r=>r.json()).then(sz=>{
   rows = sz.entries;
   build();
 }).catch(e=>{ const l=document.getElementById('loading'); l.innerHTML='<div style="color:#f55">scan error: ' + esc(String(e)) + '</div>'; });
+
+function freshTxt(w){
+  if(w.prunable) return '<span class="none">prunable</span>';
+  if(w.fresh === true)  return '<span class="fresh">fresh</span>';
+  if(w.fresh === false) return '<span class="stale">stale' + ((w.ahead||w.behind)? ' (' + (w.ahead||0) + '/' + (w.behind||0) + ')' : '') + '</span>';
+  return '<span class="none">no remote</span>';
+}
+function dirtyTxt(w){
+  if(w.unstaged == null) return '';
+  const parts = [];
+  if(w.unstaged) parts.push('<span class="mt">' + w.unstaged + ' unstaged</span>');
+  if(w.staged)   parts.push('<span class="mt">' + w.staged + ' staged</span>');
+  return parts.join('');
+}
+fetch('/api/repos').then(r=>r.json()).then(d=>{
+  const html = d.repos.map(rep=>{
+    if(rep.error) return '<h3>' + esc(rep.name) + '</h3><p class="mt">' + esc(rep.error) + '</p>';
+    const rows = rep.worktrees.map(w=>
+      '<tr><td>' + esc(w.path.replace(/^\/home\/nixos\//,'')) + '</td>' +
+      '<td>' + esc(w.branch||'(detached)') + ' <span class="none">' + esc(w.head) + '</span></td>' +
+      '<td>' + freshTxt(w) + '</td>' +
+      '<td>' + (w.unstaged==null?'':(w.unstaged+w.staged? dirtyTxt(w):'<span class="none">clean</span>')) + '</td></tr>'
+    ).join('');
+    return '<h3>' + esc(rep.name) + '</h3><table class="repotbl"><thead><tr><th>worktree</th><th>branch</th><th>vs remote</th><th>working tree</th></tr></thead><tbody>' + rows + '</tbody></table>';
+  }).join('');
+  document.getElementById('repos').innerHTML = html;
+}).catch(e=>{ document.getElementById('repos').innerHTML='<p class="mt">repos error: ' + esc(String(e)) + '</p>'; });
 </script>
 </body></html>
