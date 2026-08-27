@@ -20,7 +20,7 @@ curl -X POST http://localhost:8100/v1/videos/sync \
   -F 'prompt=A cat playing a trumpet on a rooftop at dusk' \
   -F width=1344 -F height=768 -F fps=24 \
   -F num_inference_steps=50 -F flow_shift=12 -F seed=1101 \
-  -F 'extra_params={"task":"t2va","duration":5.0,"audio_flow_shift":3.0}' \
+  -F 'extra_params={"task":"t2va","duration":5.0,"audio_flow_shift":3.0,"aspect_ratio":"16:9"}' \
   -o video.mp4
 ```
 

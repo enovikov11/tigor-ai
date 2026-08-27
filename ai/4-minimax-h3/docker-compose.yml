@@ -25,3 +25,4 @@ services:
       --num-gpus 1
       --enable-cpu-offload
       --diffusion-attention-backend CUDNN_ATTN
+      --init-timeout 3600

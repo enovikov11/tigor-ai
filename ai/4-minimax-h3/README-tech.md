@@ -25,7 +25,7 @@
       -F 'prompt=A cat playing a trumpet on a rooftop at dusk' \
       -F width=1344 -F height=768 -F fps=24 \
       -F num_inference_steps=50 -F flow_shift=12 -F seed=1101 \
-      -F 'extra_params={"task":"t2va","duration":5.0,"audio_flow_shift":3.0}' \
+      -F 'extra_params={"task":"t2va","duration":5.0,"audio_flow_shift":3.0,"aspect_ratio":"16:9"}' \
       -o /home/nixos/minimax-h3-output/out.mp4
 - shapes: short edge 768 (fast) or 1440 (2K); 1344×768 is the documented 16:9
 - task: t2va | fl2va (1-2 images) | ref2va (1 image + 1 audio ref, current serving limit)
@@ -36,6 +36,9 @@
   (104 safetensors, verified 2026-08-27)
 
 ## Pitfalls
+- **t2va REQUIRES explicit aspect_ratio** in extra_params (e.g. "16:9") — 500 "t2va requires an explicit aspect_ratio" without it
+- source must sit at a commit **before the vLLM 0.28.0 rebase (#6606, 2026-08-27)** — image has vllm 0.26.0, newer main imports create_error_response and crashes at startup; da4a08b6 verified
+- **--init-timeout 3600** mandatory: 451G load = ~30 min, default 600s kills startup ("Orchestrator did not become ready")
 - /dev/shm: recipe warns 5s 1024×576 clip needs ~0.9GiB — set shm 16g
 - first request = compile warmup
 - 24 FPS fixed; 4–15s duration; seed makes output deterministic
