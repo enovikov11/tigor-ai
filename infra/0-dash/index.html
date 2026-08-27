@@ -1,0 +1,118 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>sizes</title>
+<style>
+body{font-family:monospace;background:#111;color:#eee;padding:2rem}
+table{border-collapse:collapse;width:100%}
+td,th{padding:.35em .8em;border-bottom:1px solid #333}
+.num{text-align:right}
+.ic{white-space:nowrap}
+tr:hover{background:#1e1e1e}
+.legend{color:#999}
+.bar{background:#333;border-radius:3px;height:.9em;overflow:hidden;display:inline-block;width:20em;vertical-align:middle}
+.bar i{display:block;height:100%;background:#4a4}
+.btn{cursor:pointer;background:#222;color:#8f8;border:none;border-radius:3px;font-family:inherit;padding:0 .5em;margin-right:.5em}
+.btn.r{float:right;margin-left:.5em;margin-right:0}
+.warn{color:#f55;font-size:1.2em}
+</style></head><body>
+<h1>model sizes</h1>
+<p class="legend">&#183; ⚡ = ssd &#183; 🐢 = hdd &#183; 🐘 = 100 GB &#183; 🐭 = 10 GB (max of ssd/hdd) &#183; 🧊 = quant &#183; ❗ = file size differs between ssd/hdd &#183; round up</p>
+<div id="disks"></div>
+<div id="tbl"></div>
+<script>
+let files = [];
+const openP = new Set(), openM = new Set();
+const GB = 1073741824;
+const DISK = {ssd: '⚡', hdd: '🐢'}, Q = '🧊', WARN = '❗';
+function icons(gb){ if(gb<=0) return ''; const b=Math.ceil(gb/10); return '🐘'.repeat(Math.floor(b/10))+'🐭'.repeat(b%10); }
+function esc(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
+function copy(el){
+  const p = el.dataset.p;
+  const done = () => { el.textContent='✓'; setTimeout(()=>el.textContent='⧉',1000); };
+  const fb = () => { const t=document.createElement('textarea'); t.value=p; document.body.appendChild(t); t.select(); document.execCommand('copy'); t.remove(); done(); };
+  if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(p).then(done).catch(fb); } else { fb(); }
+}
+function build(){
+  const g = {};
+  for(const f of files){
+    const k = f.provider + '\u0000' + f.model + '\u0000' + f.quant;
+    let n = g[k];
+    if(!n){ n = g[k] = {p:f.provider, m:f.model, q:f.quant, ssd:0, hdd:0, files:{}}; }
+    n[f.disk] += f.bytes;
+    let fm = n.files[f.rel];
+    if(!fm){ fm = n.files[f.rel] = {}; }
+    fm[f.disk] = (fm[f.disk]||0) + f.bytes;
+  }
+  for(const k in g){
+    const n = g[k];
+    n.mm = false;
+    for(const rel in n.files){
+      const fm = n.files[rel];
+      if(fm.ssd !== undefined && fm.hdd !== undefined && fm.ssd !== fm.hdd){ n.mm = true; break; }
+    }
+    delete n.files;
+  }
+  const mods = {}, provs = {};
+  for(const k in g){
+    const n = g[k];
+    const mk = n.p + '/' + n.m;
+    const M = mods[mk] = mods[mk] || {p:n.p, m:n.m, ssd:0, hdd:0, mm:false, qs:{}};
+    const P = provs[n.p] = provs[n.p] || {p:n.p, ssd:0, hdd:0, mm:false, nmods:new Set()};
+    M.ssd += n.ssd; M.hdd += n.hdd; M.mm = M.mm || n.mm;
+    M.qs[n.q] = true;
+    P.ssd += n.ssd; P.hdd += n.hdd; P.mm = P.mm || n.mm;
+    P.nmods.add(mk);
+  }
+  const out = [];
+  function line(path, ssd, hdd, mm, hasQ, kind, canSplit, key){
+    out.push({maxb: Math.max(ssd, hdd), html:
+      '<tr><td>' + (canSplit ? '<button class="btn" data-k="'+kind+'" data-p="'+esc(key)+'" onclick="toggle(this)">⊞</button>' : '') +
+      '<span>'+esc(path)+(hasQ ? ' '+Q : '')+'</span>' +
+      '<button class="btn r" data-p="'+esc(path)+'" onclick="copy(this)">⧉</button></td>' +
+      '<td class="num">'+(ssd ? (ssd/GB).toFixed(1) : '—')+'</td>' +
+      '<td class="num">'+(hdd ? (hdd/GB).toFixed(1) : '—')+'</td>' +
+      '<td class="ic">'+icons(Math.max(ssd,hdd)/GB)+(mm ? ' <span class="warn">'+WARN+'</span>' : '')+'</td></tr>'});
+  }
+  for(const pk in provs){
+    const P = provs[pk];
+    if(!openP.has(pk)){
+      line(pk, P.ssd, P.hdd, P.mm, false, 'p', P.nmods.size > 1, pk);
+      continue;
+    }
+    for(const mk in mods){
+      const M = mods[mk];
+      if(M.p !== pk) continue;
+      if(!openM.has(mk)){
+        const nq = Object.keys(M.qs).filter(q=>q).length;
+        line(mk, M.ssd, M.hdd, M.mm, nq > 0, 'm', nq > 1, mk);
+      } else {
+        for(const q in M.qs){
+          const n = g[pk + '\u0000' + M.m + '\u0000' + q];
+          line(mk + (q ? '/' + q : ''), n.ssd, n.hdd, n.mm, !!q, 'q', false, null);
+        }
+      }
+    }
+  }
+  out.sort((a,b) => b.maxb - a.maxb);
+  document.getElementById('tbl').innerHTML =
+    '<table><thead><tr><th>path</th><th class="num">⚡ ssd GB</th><th class="num">🐢 hdd GB</th><th>size (max)</th></tr></thead><tbody>' +
+    out.map(x=>x.html).join('') + '</tbody></table>';
+}
+function toggle(el){
+  const p = el.dataset.p;
+  const set = (el.dataset.k === 'p') ? openP : openM;
+  if(set.has(p)) set.delete(p); else set.add(p);
+  build();
+}
+fetch('/api/disks').then(r=>r.json()).then(dk=>{
+  document.getElementById('disks').innerHTML = dk.disks.map(d=>{
+    const pct = Math.round(d.used_gb/d.total_gb*100);
+    return '<p>'+DISK[d.disk]+' '+d.mount+': '+d.used_gb+' / '+d.total_gb+' GB ('+pct+'%)'+
+      ' <span class="bar"><i style="width:'+pct+'%"></i></span></p>';
+  }).join('');
+}).catch(e=>document.body.innerHTML += '<pre>'+e+'</pre>');
+fetch('/api/sizes').then(r=>r.json()).then(sz=>{
+  files = sz.entries;
+  build();
+}).catch(e=>document.body.innerHTML += '<pre>'+e+'</pre>');
+</script>
+</body></html>
