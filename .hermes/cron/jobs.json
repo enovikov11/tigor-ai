@@ -6,10 +6,10 @@
       "prompt": "Daily snapshot: commit and push .hermes changes in tigor-ai to main (GitHub), Forgejo as fallback.\n\n```bash\ncd /home/nixos/tigor-ai\ngit status --short\ngit add .hermes/\ngit commit -m \"auto: daily snapshot $(date +%Y-%m-%d)\" --allow-empty-message\n\n# Primary: push to GitHub main\ngit -c \"credential.helper=!/home/nixos/tigor-ai/.hermes/scripts/git-credential-github\" push github-pull-and-push-to-main main\nif [ $? -ne 0 ]; then\n  # Fallback: push to Forgejo\n  . /opt/data/secrets/forgejo.conf\n  git remote set-url forgejo-push-for-preview \"http://${FORGEJO_USER}:${FORGEJO_PASS}@10.67.69.2:${FORGEJO_PORT}/hermes/tigor-ai.git\"\n  git push forgejo-push-for-preview main\nfi\n```\n\nReport output of each command. If commit has no changes, that's fine — report it. If both pushes fail, report the error.",
       "skills": [],
       "skill": null,
-      "model": null,
-      "provider": null,
-      "provider_snapshot": "custom",
-      "model_snapshot": "Qwen3.6-27B-FP8",
+      "model": "Qwen3.8-27B-FP8",
+      "provider": "custom:local",
+      "provider_snapshot": null,
+      "model_snapshot": null,
       "base_url": null,
       "script": null,
       "no_agent": false,
@@ -46,7 +46,10 @@
         "terminal"
       ],
       "workdir": null,
-      "fire_claim": null,
+      "fire_claim": {
+        "at": "2026-08-27T08:47:42.504723+00:00",
+        "by": "80b740163715:150:2182a489dfab4d948db014d73506b77d"
+      },
       "failure_streak": 2,
       "drift_alerted": true
     },
@@ -101,5 +104,5 @@
       "workdir": null
     }
   ],
-  "updated_at": "2026-08-27T03:00:08.521921+00:00"
+  "updated_at": "2026-08-27T08:47:42.505446+00:00"
 }
