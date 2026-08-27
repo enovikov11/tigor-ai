@@ -22,18 +22,18 @@
       "schedule_display": "0 3 * * *",
       "repeat": {
         "times": null,
-        "completed": 6
+        "completed": 8
       },
       "enabled": true,
       "state": "scheduled",
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-08-18T23:18:37.017944+00:00",
-      "next_run_at": "2026-08-26T03:00:00+00:00",
-      "last_run_at": "2026-08-24T19:45:31.983106+00:00",
-      "last_status": "ok",
-      "last_error": null,
-      "last_delivery_error": "configured thread_id 346555 for telegram:818630945 was not found; delivered without thread_id",
+      "next_run_at": "2026-08-28T03:00:00+00:00",
+      "last_run_at": "2026-08-27T03:00:08.521174+00:00",
+      "last_status": "error",
+      "last_error": "RuntimeError: [drift_skip:silent] Skipped to prevent unintended spend: global inference config drifted since this job was created (model 'qwen3.6-27b-fp8' -> 'qwen3.8-27b-fp8'), and this job is unpinned. No inference call was made. To run on the new config, on the host running Hermes pin it explicitly: `hermes cron edit f749e2f9af71 --provider <provider> --model <model>` (or pin the original values to keep them). This alert is sent once; the job stays skipped until the config is pinned or restored. See #44585.",
+      "last_delivery_error": null,
       "deliver": "origin",
       "origin": {
         "platform": "telegram",
@@ -46,11 +46,9 @@
         "terminal"
       ],
       "workdir": null,
-      "fire_claim": {
-        "at": "2026-08-25T03:00:53.162794+00:00",
-        "by": "b058c56a3c6c:129:abbdb856456d41b28f989216bd7e3a7c"
-      },
-      "failure_streak": 0
+      "fire_claim": null,
+      "failure_streak": 2,
+      "drift_alerted": true
     },
     {
       "id": "c11a7070d9db",
@@ -103,5 +101,5 @@
       "workdir": null
     }
   ],
-  "updated_at": "2026-08-25T03:00:53.163165+00:00"
+  "updated_at": "2026-08-27T03:00:08.521921+00:00"
 }

@@ -136,6 +136,9 @@ custom_providers:
   - name: kimi
     base_url: https://openrouter.ai/api/v1
     model: moonshotai/kimi-k3
+  - name: qwen
+    base_url: https://openrouter.ai/api/v1
+    model: qwen/qwen3.8-27b
 
 dashboard:
   basic_auth:

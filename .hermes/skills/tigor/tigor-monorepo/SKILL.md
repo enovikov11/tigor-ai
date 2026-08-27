@@ -73,12 +73,10 @@ Both are regular HTTPS clones (non-bare). No bare repos — no `git archive` or 
 
 `enovikov11-ai-agent` token is **read-only** for `enovikov11/tigor-no-ai` (can push to fork only).
 
-**PAT location:** `GITHUB_TOKEN` in `/opt/data/.env`. Extract with:
+**PAT location:** `GITHUB_TOKEN` in `~/.hermes/.env` on the SSH terminal (= `~/tigor-ai/.hermes/.env`, same file). `/opt/data/.env` is the container-side path — it does NOT exist from the SSH terminal.
 ```bash
-PAT=$(grep "^GITHUB_TOKEN=" /opt/data/.env | cut -d= -f2-)
+PAT=$(grep "^GITHUB_TOKEN=" /home/nixos/.hermes/.env | cut -d= -f2-)
 ```
-
-Old references to `git config --global github.token` are stale — the PAT lives in `.env`.
 
 ### Secrets that survive reclone/reinstall
 
@@ -118,8 +116,8 @@ Evgenii's personal monorepo split into two repos:
 - **`.hermes` config**: lives inside tigor-ai, bind-mounted to `/opt/data/` (Hermes workdir)
 
 ### tigor-no-ai (clone: `/home/nixos/tigor-no-ai`)
-- **Remote `github-pull`**: `https://github.com/enovikov11/tigor-no-ai.git` — pull from user's repo
-- **Remote `github-push-to-feature-branch`**: `https://github.com/enovikov11-ai-agent/tigor-no-ai.git` — push feature branches (fork)
+- **Remote `origin`**: `https://github.com/enovikov11/tigor-no-ai.git` — pull from user's repo (was `github-pull` in older clones; check `git remote -v` — if remotes are still named `github-pull`/`github-push-to-feature-branch`, use those instead)
+- **Remote `fork`**: `https://github.com/enovikov11-ai-agent/tigor-no-ai.git` — push feature branches (fork; was `github-push-to-feature-branch`)
 - **NO Forgejo remote** — tigor-no-ai exists only on GitHub
 - **Worktrees**: `/home/nixos/tigor-no-ai.worktrees/<name>/`
 - **.gitignore**: `**/README.md` and `**/README-tech.md` (AI files managed in tigor-ai)
