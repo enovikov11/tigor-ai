@@ -1,0 +1,34 @@
+services:
+  minimax-h3:
+    image: vllm/vllm-omni:minimax-h3
+    container_name: minimax-h3
+    network:
+      name: tigor-ai_default
+    ports:
+      - "8010:8000"
+    devices:
+      - /dev/nvidia0:/dev/nvidia0
+      - /dev/nvidiactl:/dev/nvidiactl
+      - /dev/nvidia-uvm:/dev/nvidia-uvm
+      - /dev/nvidia-uvm-tools:/dev/nvidia-uvm-tools
+    shm_size: "16g"
+    security_opt:
+      - seccomp=unconfined
+    environment:
+      PYTHONPATH: /vllm-omni
+      VLLM_WORKER_MULTIPROC_METHOD: spawn
+      VLLM_OMNI_VIDEO_SYNC_TIMEOUT: "14400"
+      CUDA_VISIBLE_DEVICES: "0"
+    volumes:
+      - /hdd/public/internet/huggingface-temp/MiniMaxAI/MiniMax-H3:/MiniMax-H3:ro
+      - /home/nixos/vllm-omni-src:/vllm-omni:ro
+      - /home/nixos/minimax-h3-output:/output
+    command: >
+      vllm serve /MiniMax-H3
+      --omni
+      --host 0.0.0.0
+      --port 8000
+      --trust-remote-code
+      --num-gpus 1
+      --enable-cpu-offload
+      --diffusion-attention-backend CUDNN_ATTN
