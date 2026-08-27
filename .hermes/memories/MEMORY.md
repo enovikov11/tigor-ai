@@ -16,6 +16,8 @@ User's YAML config files and .gitignore should not be touched unless explicitly 
 §
 GitHub REST curl from SSH VM terminal times out (blocked). For PRs: git push to fork remote (token in URL) + give the GitHub PR-new/compare link; don't retry curl.
 §
-tigor-no-ai vm.xsl: fix test <vm> definitions, not the template (user: template change = noop, not fix). vhostuser/virtiofs need <access mode="shared"/> in memoryBacking; template emits it only when a mount exists; SEV <locked/> memory is host-encrypted, incompatible with virtiofs. Verify: xsltproc --nonet vm.xsl vm.xsl.
+tigor-no-ai vm.xsl: fix test <vm> definitions, not the template. Verify: xsltproc --nonet vm.xsl vm.xsl.
 §
 Model policy: NO auto-fallback — model choice must be explicit. OpenRouter providers (glm, kimi, qwen=qwen/qwen3.8-27b) only when local vLLM is temporarily off or on explicit user request for a rare smart model.
+§
+HF model storage: host-r73-pods-gui-su /hdd + /ssd under /public/internet (huggingface.co, huggingface.co-temp) — both reachable/readable from VM ssh terminal; audit with find -printf '%s\t%p\n' then size-based dedupe in Python.

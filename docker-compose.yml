@@ -12,7 +12,7 @@ services:
       VLLM_LOGGING_LEVEL: INFO
     volumes:
       - /ssd/public/internet/huggingface.co:/huggingface.co:ro
-      - /home/nixos/vllm-cache:/root/.cache/vllm
+      - /home/nixos/data-vllm:/root/.cache/vllm
     shm_size: 16g
     ports:
       - "8000:8000"
@@ -48,7 +48,7 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      - /home/nixos/forgejo-data:/data
+      - /home/nixos/data-forgejo:/data
 
   hermes:
     container_name: hermes
@@ -58,7 +58,7 @@ services:
     user: "0:0"
     volumes:
       - /home/nixos/tigor-ai/.hermes:/opt/data
-      - /home/nixos/.ssh:/home/nixos/.ssh
+      - /home/nixos:/home/nixos
     ports:
       - "9119:9119"
     environment:
@@ -80,8 +80,9 @@ services:
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile
       - /home/nixos/tigor-ai.worktrees/public-http-pages:/srv/data:ro
-      - /home/nixos/pages-data/caddy-data:/data
-      - /home/nixos/pages-data/caddy-config:/config
+      - /home/nixos/data-caddy/data:/data
+      - /home/nixos/data-caddy/config:/config
     ports:
       - "80:80"
       - "443:443" 
+
