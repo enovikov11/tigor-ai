@@ -41,6 +41,35 @@ services:
       --enable-prefix-caching
       --performance-mode interactivity
 
+  vllm-omni:
+    container_name: vllm-omni
+    image: vllm/vllm-omni:minimax-h3
+    profiles: ["omni"]
+    ports:
+      - "8100:8000"
+    devices:
+      - nvidia.com/gpu=0
+    shm_size: "16g"
+    environment:
+      PYTHONPATH: /vllm-omni
+      VLLM_WORKER_MULTIPROC_METHOD: spawn
+      VLLM_OMNI_VIDEO_SYNC_TIMEOUT: "14400"
+      CUDA_VISIBLE_DEVICES: "0"
+    volumes:
+      - /hdd/public/internet/huggingface-temp/MiniMaxAI/MiniMax-H3:/MiniMax-H3:ro
+      - /home/nixos/vllm-omni-src:/vllm-omni:ro
+      - /home/nixos/minimax-h3-output:/output
+    command: >
+      vllm serve /MiniMax-H3
+      --omni
+      --host 0.0.0.0
+      --port 8000
+      --trust-remote-code
+      --num-gpus 1
+      --enable-cpu-offload
+      --diffusion-attention-backend CUDNN_ATTN
+      --init-timeout 3600
+
   forgejo:
     container_name: forgejo
     image: codeberg.org/forgejo/forgejo:16
