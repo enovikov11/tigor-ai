@@ -107,14 +107,12 @@ def api_repos():
         out.append(entry)
     return {"repos": out}
 
-INDEX = Path(__file__).parent / "index.html"
-
 
 def quant_of(path: str) -> str:
     if not path.lower().endswith(".gguf"):
         return ""
     parts = path.split("/")
-    for s in (parts[-1], parts[-2]):
+    for s in (parts[-1], parts[-2] if len(parts) > 1 else ""):
         m = QUANT.search(s)
         if m:
             return m.group(1).upper()
@@ -157,9 +155,9 @@ def common_dir(dirs):
 @app.get("/api/sizes")
 def sizes():
     p = subprocess.run(["sh", "-c", CMD], capture_output=True, text=True, timeout=600)
-    # per (top, relpath) -> {ssd:bytes, hdd:bytes, q} for mismatch detection
-    fsize = defaultdict(lambda: {"ssd": 0, "hdd": 0, "q": None})
-    # group by (provider,model,quant) -> per (disk,top) -> dirs, and byte sums
+    # per (top, relpath) -> bytes per disk (for mismatch + presence)
+    fsize = defaultdict(lambda: {"ssd": 0, "hdd": 0})
+    # group by (provider, model, quant) -> byte sums + dirs per (disk, top)
     g = {}
     for line in p.stdout.splitlines():
         size, path = line.split("\t", 1)
@@ -172,80 +170,80 @@ def sizes():
         q = quant_of(path)
         fdir = path.rsplit("/", 1)[0]
         fsize[(top, rest)][disk] += int(size)
-        if fsize[(top, rest)]["q"] is None:
-            fsize[(top, rest)]["q"] = q
         key = (provider, model, q)
         n = g.setdefault(key, {"ssd": 0, "hdd": 0,
-                               "dirs": defaultdict(set),
-                               "provd": set(), "modeld": set()})
+                               "dirs": defaultdict(set)})
         n[disk] += int(size)
         n["dirs"][(disk, top)].add(fdir)
-        n["provd"].add("/" + disk + "/public/internet/" + top + "/" + provider)
-        n["modeld"].add("/" + disk + "/public/internet/" + top + "/" + provider + "/" + model)
 
-    # mismatches: same (top,rel) on both disks, different size
+    def key_parts(key):
+        provider, model, q = key
+        return (provider + "\x00" + model + "\x00" + q,
+                provider + "\x00" + model, provider)
+
+    # file-level size mismatch: same relative file on both disks, different size
     mm = set()
+    # presence discrepancy: file exists on one disk only (count per quant group)
+    disc = defaultdict(int)
     for (top, rest), v in fsize.items():
+        if v["ssd"] == 0 and v["hdd"] == 0:
+            continue
+        parts = rest.split("/", 3)
+        if len(parts) < 4:
+            continue
+        top2, provider, model, fpath = parts
+        q = quant_of(fpath)
+        k3 = (provider, model, q)
         if v["ssd"] > 0 and v["hdd"] > 0 and v["ssd"] != v["hdd"]:
-            parts = rest.split("/", 3)
-            if len(parts) >= 4:
-                mm.add((parts[1], parts[2], v["q"] or ""))
-    mm_model = {(a, b) for (a, b, c) in mm}
-    mm_prov = {a for (a, b, c) in mm}
-
-    provs = {}
-    mods = {}
-    for (provider, model, q), n in g.items():
-        mk = provider + "\x00" + model
-        M = mods.setdefault(mk, {"p": provider, "m": model, "ssd": 0, "hdd": 0,
-                                 "qs": set(), "provd": set(), "modeld": set()})
-        P = provs.setdefault(provider, {"p": provider, "ssd": 0, "hdd": 0,
-                                        "nmods": set(), "provd": set()})
-        M["ssd"] += n["ssd"]; M["hdd"] += n["hdd"]
-        if q:
-            M["qs"].add(q)
-        P["ssd"] += n["ssd"]; P["hdd"] += n["hdd"]
-        P["nmods"].add(mk)
-        M["provd"] |= n["provd"]; M["modeld"] |= n["modeld"]
-        P["provd"] |= n["provd"]
+            mm.add(k3)
+        if (v["ssd"] > 0) != (v["hdd"] > 0):
+            disc[k3] += 1
 
     rows = []
-
-    def paths_of(dirmap):
-        out = []
-        for (disk, top), dirs in dirmap.items():
-            out.append(common_dir(dirs))
-        return sorted(out)
-
-    # quant rows
-    for (provider, model, q), n in g.items():
-        rows.append({"level": 2, "key": provider + "\x00" + model + "\x00" + q,
-                     "parent": provider + "\x00" + model,
+    for key, n in g.items():
+        k3, k1, k0 = key_parts(key)
+        provider, model, q = key
+        rows.append({"level": 2, "key": k3, "p1": k1, "p0": k0,
                      "name": provider + "/" + model + ("/" + q if q else ""),
                      "ssd": n["ssd"], "hdd": n["hdd"],
-                     "mm": (provider, model, q) in mm,
-                     "canSplit": False, "hasQ": True,
-                     "paths": paths_of(n["dirs"])})
-    # model rows
-    for mk, M in mods.items():
-        provider, model = M["p"], M["m"]
-        rows.append({"level": 1, "key": mk, "parent": provider,
+                     "mm": key in mm, "dc": disc.get(key, 0),
+                     "paths": sorted(common_dir(v) for v in n["dirs"].values())})
+
+    mods = {}
+    for key, n in g.items():
+        k3, k1, k0 = key_parts(key)
+        provider, model, q = key
+        M = mods.setdefault(k1, {"ssd": 0, "hdd": 0, "mm": 0, "dc": 0, "qs": set()})
+        M["ssd"] += n["ssd"]; M["hdd"] += n["hdd"]
+        M["mm"] += int(key in mm)
+        M["dc"] += disc.get(key, 0)
+        if q:
+            M["qs"].add(q)
+
+    provs = {}
+    for k1, M in mods.items():
+        provider = k1.split("\x00")[0]
+        P = provs.setdefault(provider, {"ssd": 0, "hdd": 0, "mm": 0, "dc": 0})
+        P["ssd"] += M["ssd"]; P["hdd"] += M["hdd"]
+        P["mm"] += M["mm"]; P["dc"] += M["dc"]
+
+    for k1, M in mods.items():
+        provider, model = k1.split("\x00")
+        rows.append({"level": 1, "key": k1, "p1": None, "p0": provider,
                      "name": provider + "/" + model,
                      "ssd": M["ssd"], "hdd": M["hdd"],
-                     "mm": (provider, model) in mm_model,
-                     "canSplit": len(M["qs"]) >= 1,
-                     "hasQ": len(M["qs"]) > 0,
-                     "paths": sorted(M["modeld"])})
-    # provider rows
+                     "mm": M["mm"] > 0, "dc": M["dc"],
+                     "hasQ": len(M["qs"]) > 0})
+
     for provider, P in provs.items():
-        rows.append({"level": 0, "key": provider, "parent": None,
+        rows.append({"level": 0, "key": provider, "p1": None, "p0": None,
                      "name": provider,
                      "ssd": P["ssd"], "hdd": P["hdd"],
-                     "mm": provider in mm_prov,
-                     "canSplit": len(P["nmods"]) >= 1,
-                     "hasQ": False,
-                     "paths": sorted(P["provd"])})
+                     "mm": P["mm"] > 0, "dc": P["dc"]})
     return {"entries": rows}
+
+
+INDEX = Path(__file__).parent / "index.html"
 
 
 @app.get("/")
