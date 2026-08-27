@@ -67,7 +67,9 @@ def sizes():
 
 @app.get("/", response_class=HTMLResponse)
 def index():
-    return HTML
+    resp = HTMLResponse(HTML)
+    resp.headers["Cache-Control"] = "no-store, max-age=0"
+    return resp
 
 
 HTML = """<!doctype html>
