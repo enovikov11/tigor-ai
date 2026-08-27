@@ -5,7 +5,7 @@
 Serving [MiniMaxAI/MiniMax-H3](https://huggingface.co/MiniMaxAI/MiniMax-H3) via vLLM-Omni — text/image/video-to-video generation with native stereo audio (24 FPS MP4, H.264 + AAC).
 
 ## What it does
-- OpenAI-compatible `/v1/videos` API on port 8010 (host)
+- OpenAI-compatible `/v1/videos` API on port 8100 (host)
 - Profile: single GPU, fast generation — DiT + VAE resident in 96 GB VRAM, only the Qwen3-VL text encoder CPU-offloaded (one-shot per request, ~0.2 s of 87 s total, no impact on gen speed)
 - No `--enforce-eager` — regional compile active (~+9.5%)
 - CUDNN_ATTN attention backend (RTX PRO 6000 Blackwell)
@@ -16,7 +16,7 @@ Serving [MiniMaxAI/MiniMax-H3](https://huggingface.co/MiniMaxAI/MiniMax-H3) via 
 
 ## Generation
 ```bash
-curl -X POST http://localhost:8010/v1/videos/sync \
+curl -X POST http://localhost:8100/v1/videos/sync \
   -F 'prompt=A cat playing a trumpet on a rooftop at dusk' \
   -F width=1344 -F height=768 -F fps=24 \
   -F num_inference_steps=50 -F flow_shift=12 -F seed=1101 \

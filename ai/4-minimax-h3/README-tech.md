@@ -21,7 +21,7 @@
     # or: podman start minimax-h3 (already created)
 
 ## Generate (sync, MP4 in response)
-    curl -X POST http://localhost:8010/v1/videos/sync \
+    curl -X POST http://localhost:8100/v1/videos/sync \
       -F 'prompt=A cat playing a trumpet on a rooftop at dusk' \
       -F width=1344 -F height=768 -F fps=24 \
       -F num_inference_steps=50 -F flow_shift=12 -F seed=1101 \
