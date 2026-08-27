@@ -7,13 +7,8 @@ services:
     ports:
       - "8010:8000"
     devices:
-      - /dev/nvidia0:/dev/nvidia0
-      - /dev/nvidiactl:/dev/nvidiactl
-      - /dev/nvidia-uvm:/dev/nvidia-uvm
-      - /dev/nvidia-uvm-tools:/dev/nvidia-uvm-tools
+      - nvidia.com/gpu=0
     shm_size: "16g"
-    security_opt:
-      - seccomp=unconfined
     environment:
       PYTHONPATH: /vllm-omni
       VLLM_WORKER_MULTIPROC_METHOD: spawn
