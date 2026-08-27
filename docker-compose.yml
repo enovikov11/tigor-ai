@@ -65,6 +65,16 @@ services:
       HERMES_DASHBOARD: "1"
     command: ["gateway", "run"]
 
+  0-dash:
+    container_name: 0-dash
+    build: ./infra/0-dash
+    restart: unless-stopped
+    ports:
+      - "1337:1337"
+    volumes:
+      - /hdd/public/internet:/hdd/public/internet:ro
+      - /ssd/public/internet:/ssd/public/internet:ro
+
   caddy:
     container_name: caddy
     image: docker.io/library/caddy:2
