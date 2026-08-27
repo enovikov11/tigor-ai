@@ -35,13 +35,14 @@ def sizes():
         size, path = line.split("\t", 1)
         disk = "ssd" if path.startswith("/ssd/") else "hdd"
         parts = path.split("/internet/", 1)[1].split("/", 3)
-        model = "/".join(parts[1:3]) if len(parts) >= 3 else parts[-1]
-        key = (disk, model, quant_of(path))
+        provider = parts[1] if len(parts) >= 3 else ""
+        model = parts[2] if len(parts) >= 3 else parts[-1]
+        key = (disk, provider, model, quant_of(path))
         total[key] = total.get(key, 0) + int(size)
     rows = []
-    for (disk, model, q), b in total.items():
-        rows.append({"path": disk + "/" + model + ("/" + q if q else ""), "bytes": b})
-    rows.sort(key=lambda r: r["bytes"], reverse=True)
+    for (disk, provider, model, q), b in total.items():
+        rows.append({"disk": disk, "provider": provider, "model": model,
+                     "quant": q, "bytes": b})
     return {"entries": rows}
 
 
@@ -60,29 +61,61 @@ td:nth-child(2),th:nth-child(2){text-align:right}
 td:nth-child(3){white-space:nowrap}
 tr:hover{background:#1e1e1e}
 .legend{color:#999}
-.cp{cursor:pointer;background:#222;color:#8f8;border:none;border-radius:3px;font-family:inherit;padding:0 .5em;margin-left:.5em}
+.btn{cursor:pointer;background:#222;color:#8f8;border:none;border-radius:3px;font-family:inherit;padding:0 .5em;margin-left:.5em}
 </style></head><body>
 <h1>model sizes</h1>
-<p class="legend" id="legend"></p>
-<table><thead><tr><th>path</th><th>GB</th><th></th></tr></thead>
+<p class="legend">⚡ ssd &#183; 🐢 hdd &#183; 🐘 = 100 GB &#183; 🐭 = 10 GB &#183; 🧊 = quant &#183; round up &#183; ⊞ = split</p>
+<table><thead><tr><th>path</th><th>GB</th><th></th><th></th></tr></thead>
 <tbody id="rows"></tbody></table>
 <script>
 const DISK = {ssd: '⚡', hdd: '🐢'}, Q = '🧊';
-document.getElementById('legend').innerHTML = DISK.ssd+' ssd &#183; '+DISK.hdd+' hdd &#183; 🐘 = 100 GB &#183; 🐭 = 10 GB &#183; '+Q+' = quant &#183; round up';
+let leaves = [], expP = new Set(), expM = new Set();
+const pkey = (d,p)=>d+'/'+p, mkey=(d,p,m)=>d+'/'+p+'/'+m;
+function icons(gb){const b=Math.ceil(gb/10);return '🐘'.repeat(Math.floor(b/10))+'🐭'.repeat(b%10);}
 function copy(el){
   const p = el.dataset.p;
   const done = () => { el.textContent='✓'; setTimeout(()=>el.textContent='⧉',1000); };
   const fb = () => { const t=document.createElement('textarea'); t.value=p; document.body.appendChild(t); t.select(); document.execCommand('copy'); t.remove(); done(); };
   if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(p).then(done).catch(fb); } else { fb(); }
 }
-fetch('/api/sizes').then(r=>r.json()).then(d=>{
-  document.getElementById('rows').innerHTML = d.entries.map(e=>{
+function toggle(path){
+  const parts = path.split('/');
+  const s = parts.length===2 ? expP : expM;
+  s.has(path) ? s.delete(path) : s.add(path);
+  build();
+}
+function build(){
+  const provs = {}, models = {};
+  for(const l of leaves){
+    const pk = pkey(l.disk, l.provider);
+    (provs[pk] = provs[pk] || {bytes:0, disk:l.disk}).bytes += l.bytes;
+    const mk = mkey(l.disk, l.provider, l.model);
+    const m = models[mk] = models[mk] || {bytes:0, disk:l.disk, provider:l.provider, model:l.model, quants:[]};
+    m.bytes += l.bytes;
+    if(l.quant) m.quants.push({...l, key: mk+'/'+l.quant});
+  }
+  const out = [];
+  for(const [pk, p] of Object.entries(provs)){
+    if(!expP.has(pk)){ out.push({bytes:p.bytes, disk:p.disk, path:pk, quant:false, split:true}); continue; }
+    for(const [mk, m] of Object.entries(models)){
+      if(mkey(m.disk, m.provider, m.model) !== mk) continue;
+      if(m.disk+'/'+m.provider !== pk) continue;
+      if(expM.has(mk) && m.quants.length>1){
+        for(const q of m.quants) out.push({bytes:q.bytes, disk:q.disk, path:q.key, quant:true, split:false});
+      } else {
+        out.push({bytes:m.bytes, disk:m.disk, path:mk, quant:m.quants.length>0, split:m.quants.length>1});
+      }
+    }
+  }
+  out.sort((a,b)=>b.bytes-a.bytes);
+  document.getElementById('rows').innerHTML = out.map(e=>{
     const gb = e.bytes/1073741824;
-    const b = Math.ceil(gb/10);
-    const disk = e.path.split('/')[0], rest = e.path.split('/').slice(1).join('/');
-    return '<tr><td>'+DISK[disk]+' '+rest+(rest.split('/').length>2?' '+Q:'')+'</td><td>'+gb.toFixed(2)+'</td><td>'+
-      '🐘'.repeat(Math.floor(b/10))+'🐭'.repeat(b%10)+'</td><td><button class="cp" data-p="'+e.path+'" onclick="copy(this)">⧉</button></td></tr>';
+    return '<tr><td>'+DISK[e.disk]+' '+e.path+(e.quant?' '+Q:'')+'</td><td>'+gb.toFixed(2)+'</td><td>'+
+      icons(gb)+'</td><td>'+(e.split?'<button class="btn" onclick="toggle(\''+e.path+'\')">⊞</button>':'') +
+      '<button class="btn" data-p="'+e.path+'" onclick="copy(this)">⧉</button></td></tr>';
   }).join('');
-}).catch(e=>document.getElementById('rows').innerHTML='<tr><td>'+e+'</td></tr>');
+}
+fetch('/api/sizes').then(r=>r.json()).then(d=>{leaves=d.entries; build();})
+  .catch(e=>document.getElementById('rows').innerHTML='<tr><td>'+e+'</td></tr>');
 </script>
 </body></html>"""
