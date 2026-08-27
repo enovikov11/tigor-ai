@@ -48,3 +48,4 @@ Host: NixOS VM, user `nixos`, rootless podman, 1× NVIDIA RTX PRO 6000 Blackwell
 ## Model-specific notes
 
 See `references/minimax-h3.md` for MiniMax-H3 API quirks, timings, and t2va semantics.
+See `references/qwen38-flash-next.md` for Qwen3.8-Flash-Next NVFP4 on single 96GB Blackwell (quant layout, PLE CPU offload, MTP).
