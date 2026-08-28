@@ -54,7 +54,9 @@ done; done
 
 ## Conventions (user's tigor-no-ai style)
 
-- Users: explicit uid AND explicit `group` (own user group), gids explicit on `users.groups`. Layout used in flake.nix r74: root 0, nixos 1000, then public/private/secret at 2000/2001/2002 with matching gids.
+- Users: explicit uid AND explicit `group` (own user group), gids explicit on `users.groups`.
+- NEVER use short names for users: always full `public` / `private` / `secret` (no pub/priv/sec abbreviations) in image suffixes, paths, flags.
+- Layout in flake.nix: root (uid 0 implicit), then public/private/secret at 2000/2001/2002 with matching gids.
 - No AI-written comments in committed config files. Keep diffs minimal — only the hunk that changes behavior.
 
 ## Pitfalls

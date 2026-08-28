@@ -57,6 +57,11 @@ class H(BaseHTTPRequestHandler):
             t.start()
 ```
 
+## Pitfalls
+
+- `python:3-alpine` has **no bash** — `subprocess.run(["bash", "-c", ...])` raises `FileNotFoundError`. Use `sh -c` (busybox sh handles globs in `find`/`du` one-liners fine).
+- The terminal command guard false-positives on heredocs containing `CMD [..uvicorn..]` or `docker compose up` in the same command as other work — write such files with a Python `open().write()` heredoc, and run `up` with `background=true`.
+
 ## Compose
 
 - Named volume for shared state between services (e.g. a repo)

@@ -3,7 +3,7 @@
     {
       "id": "f749e2f9af71",
       "name": "hermes-config daily push",
-      "prompt": "Daily snapshot: commit and push .hermes changes in tigor-ai to main (GitHub), Forgejo as fallback.\n\n```bash\ncd /home/nixos/tigor-ai\ngit status --short\ngit add .hermes/\ngit commit -m \"auto: daily snapshot $(date +%Y-%m-%d)\" --allow-empty-message\n\n# Primary: push to GitHub main\ngit -c \"credential.helper=!/home/nixos/tigor-ai/.hermes/scripts/git-credential-github\" push github-pull-and-push-to-main main\nif [ $? -ne 0 ]; then\n  # Fallback: push to Forgejo\n  . /opt/data/secrets/forgejo.conf\n  git remote set-url forgejo-push-for-preview \"http://${FORGEJO_USER}:${FORGEJO_PASS}@10.67.69.2:${FORGEJO_PORT}/hermes/tigor-ai.git\"\n  git push forgejo-push-for-preview main\nfi\n```\n\nReport output of each command. If commit has no changes, that's fine \u2014 report it. If both pushes fail, report the error.",
+      "prompt": "Daily snapshot: commit and push .hermes changes in tigor-ai to main (GitHub), Forgejo as fallback.\n\n```bash\ncd /home/nixos/tigor-ai\ngit status --short\ngit add .hermes/\ngit commit -m \"auto: daily snapshot $(date +%Y-%m-%d)\" --allow-empty-message\n\n# Primary: push to GitHub main\ngit -c \"credential.helper=!/home/nixos/tigor-ai/.hermes/scripts/git-credential-github\" push github-pull-and-push-to-main main\nif [ $? -ne 0 ]; then\n  # Fallback: push to Forgejo\n  . /opt/data/secrets/forgejo.conf\n  git remote set-url forgejo-push-for-preview \"http://${FORGEJO_USER}:${FORGEJO_PASS}@10.67.69.2:${FORGEJO_PORT}/hermes/tigor-ai.git\"\n  git push forgejo-push-for-preview main\nfi\n```\n\nReport output of each command. If commit has no changes, that's fine — report it. If both pushes fail, report the error.",
       "skills": [],
       "skill": null,
       "model": null,
@@ -29,7 +29,7 @@
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-08-18T23:18:37.017944+00:00",
-      "next_run_at": "2026-08-28T03:00:00+00:00",
+      "next_run_at": "2026-08-29T03:00:00+00:00",
       "last_run_at": "2026-08-27T08:47:57.648799+00:00",
       "last_status": "ok",
       "last_error": null,
@@ -46,7 +46,10 @@
         "terminal"
       ],
       "workdir": null,
-      "fire_claim": null,
+      "fire_claim": {
+        "at": "2026-08-28T03:00:27.238198+00:00",
+        "by": "f037096e5553:154:3977a07aa15f48c598a80b5d272e6804"
+      },
       "failure_streak": 0,
       "drift_alerted": false
     },
@@ -101,5 +104,5 @@
       "workdir": null
     }
   ],
-  "updated_at": "2026-08-27T08:47:57.649595+00:00"
+  "updated_at": "2026-08-28T03:00:27.238552+00:00"
 }
