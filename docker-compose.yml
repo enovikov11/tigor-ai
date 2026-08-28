@@ -43,7 +43,7 @@ services:
 
   vllm-omni:
     container_name: vllm-omni
-    image: vllm/vllm-omni:minimax-h3
+    image: vllm/vllm-omni:nightly-da4a08b65bfe717d8c4bc1a98decd0c8ad88976b
     profiles: ["omni"]
     ports:
       - "8100:8000"
@@ -51,13 +51,11 @@ services:
       - nvidia.com/gpu=0
     shm_size: "16g"
     environment:
-      PYTHONPATH: /vllm-omni
       VLLM_WORKER_MULTIPROC_METHOD: spawn
       VLLM_OMNI_VIDEO_SYNC_TIMEOUT: "14400"
       CUDA_VISIBLE_DEVICES: "0"
     volumes:
-      - /hdd/public/internet/huggingface-temp/MiniMaxAI/MiniMax-H3:/MiniMax-H3:ro
-      - /home/nixos/vllm-omni-src:/vllm-omni:ro
+      - /hdd/public/internet/huggingface.co/MiniMaxAI/MiniMax-H3:/MiniMax-H3:ro
       - /home/nixos/minimax-h3-output:/output
     command: >
       vllm serve /MiniMax-H3
