@@ -1,5 +1,9 @@
+import asyncio
+import http.client
+import json
 import os
 import re
+import socket
 import subprocess
 from collections import defaultdict
 from pathlib import Path
@@ -152,8 +156,7 @@ def common_dir(dirs):
     return "/".join(first)
 
 
-@app.get("/api/sizes")
-def sizes():
+def build_rows():
     p = subprocess.run(["sh", "-c", CMD], capture_output=True, text=True, timeout=600)
     # per (top, relpath) -> bytes per disk (for mismatch + presence)
     fsize = defaultdict(lambda: {"ssd": 0, "hdd": 0})
@@ -241,6 +244,90 @@ def sizes():
                      "ssd": P["ssd"], "hdd": P["hdd"],
                      "mm": P["mm"] > 0, "dc": P["dc"]})
     return {"entries": rows}
+
+
+@app.get("/api/sizes")
+async def sizes():
+    return await _sf("sizes", build_rows)
+
+
+
+PODMAN_SOCK = "/run/podman/podman.sock"
+
+
+class _UnixConn(http.client.HTTPConnection):
+    def __init__(self, path):
+        super().__init__("podman.local")
+        self._path = path
+        self.timeout = 15
+
+    def connect(self):
+        sk = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        sk.settimeout(self.timeout)
+        sk.connect(self._path)
+        self.sock = sk
+
+
+def podman_list():
+    conn = _UnixConn(PODMAN_SOCK)
+    conn.request("GET", "/containers/json?all=false")
+    resp = conn.getresponse()
+    data = json.loads(resp.read().decode())
+    conn.close()
+    out = []
+    for ct in data:
+        names = ct.get("Names") or [""]
+        out.append({"name": names[0].lstrip("/"),
+                    "image": ct.get("Image") or "?",
+                    "state": ct.get("State") or "?",
+                    "status": ct.get("Status") or "?"})
+    out.sort(key=lambda x: x["name"].lower())
+    return out
+
+
+_SF_LOCK = asyncio.Lock()
+_SF_ITEMS = {}
+_SCAN_STATS = defaultdict(int)
+
+
+async def _sf(key, fn):
+    while True:
+        async with _SF_LOCK:
+            item = _SF_ITEMS.get(key)
+            if item is None:
+                _SF_ITEMS[key] = item = {"event": asyncio.Event(), "error": None, "result": None}
+                _SCAN_STATS[key] += 1
+                break
+        await item["event"].wait()
+        if item["error"] is not None:
+            raise HTTPException(500, str(item["error"]))
+        return item["result"]
+    try:
+        item["result"] = await asyncio.to_thread(fn)
+    except Exception as e:
+        item["error"] = e
+    finally:
+        item["event"].set()
+        async with _SF_LOCK:
+            _SF_ITEMS.pop(key, None)
+    if item["error"] is not None:
+        raise HTTPException(500, str(item["error"]))
+    return item["result"]
+
+
+@app.get("/api/containers")
+async def api_containers():
+    try:
+        return {"ok": True, "containers": await _sf("containers", podman_list)}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(503, "podman socket unavailable: %s" % e)
+
+
+@app.get("/api/_stats")
+def api_stats():
+    return dict(_SCAN_STATS)
 
 
 INDEX = Path(__file__).parent / "index.html"

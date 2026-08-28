@@ -3,146 +3,257 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>sizes</title>
 <style>
-body{font-family:monospace;background:#111;color:#eee;padding:2rem;margin:0}
-table{border-collapse:collapse;width:100%}
-td,th{padding:.35em .8em;border-bottom:1px solid #333}
-.num{text-align:right}
-tr:hover{background:#1e1e1e}
-.nm{word-break:break-word;min-width:0}
-.bar{background:#333;border-radius:3px;height:.9em;overflow:hidden;display:inline-block;width:20em;max-width:100%;vertical-align:middle}
-.bar i{display:block;height:100%;background:#4a4}
-.btn{cursor:pointer;background:#222;color:#8f8;border:none;border-radius:3px;font-family:inherit;padding:.15em .5em;margin-right:.5em}
-.btn.r{float:right;margin-left:.5em;margin-right:0}
+body{font-family:monospace;background:#0d1117;color:#e6edf3;font-size:13px;margin:0;padding:.7rem 1.2rem 2rem}
+a{color:#7ec8ff;text-decoration:none}a:hover{text-decoration:underline}
+h2{margin:0}
+.toc{margin:.4rem 0 1rem;font-size:12px;color:#8b949e}
+.toc a{margin-right:.4rem;display:inline-block;padding:.2rem .3rem}
+.toc a::before{content:"# ";color:#484f58}
+.bar{position:fixed;top:0;left:0;height:3px;width:100%;z-index:9;pointer-events:none}
+.bar i{display:block;height:100%;width:34%;background:#2f81f7;border-radius:2px;
+      animation:slide 1.1s ease-in-out infinite}
+@keyframes slide{0%{transform:translateX(-110%)}100%{transform:translateX(330%)}}
+.bar.done i{display:none}
+.bar .txt{position:absolute;right:8px;top:-2px;font-size:10px;color:#7ec8ff;line-height:8px;white-space:nowrap}
+section{margin-top:1.1rem}
+section .err{color:#fa0;font-size:12px;padding:.3em 0}
+.kv{display:flex;flex-wrap:wrap;gap:.3em 1.4em;font-size:.9em;color:#8b949e;margin-bottom:.5em}
+table{border-collapse:collapse}
+td,th{padding:.28em .7em;text-align:right;white-space:nowrap;border-bottom:1px solid #21262d}
+th{color:#8b949e;font-weight:normal;font-size:.9em}
+td.n,th.n{text-align:left}
+.warn{color:#fa0;white-space:nowrap;margin-left:.5em}
+.mm{color:#f66;font-weight:bold}
+.lvl{color:#999;margin:.5em 0}
+.lvl input{vertical-align:middle}
+.lvl label{margin-right:1em;cursor:pointer}
+.row0 td{border-bottom:2px solid #333c48;font-weight:bold}
 .disc{color:#fa0;font-size:1.1em;white-space:nowrap}
+button{cursor:pointer;background:#21262d;color:#e6edf3;border:1px solid #30363d;
+       border-radius:6px;padding:0 .6em;font-family:inherit;font-size:.9em;min-height:24px}
+button:hover{background:#30363d}
 .repotbl{margin-top:.5rem}
 .fresh{color:#4a4}.stale{color:#f80}.none{color:#666}
 .mt{color:#f55;margin-left:.5em;font-size:.9em}
-.lvl input{vertical-align:middle}
-.sl{display:none;color:#788;font-size:.75em;margin-right:.3em}
-@keyframes spin{to{transform:rotate(360deg)}}
-#loading{position:fixed;inset:0;background:#111;display:flex;flex-direction:column;gap:14px;align-items:center;justify-content:center;z-index:10;color:#768390;font-family:monospace}
-#loading .spin{width:34px;height:34px;border:3px solid #21262d;border-top-color:#58a6ff;border-radius:50%;animation:spin .8s linear infinite}
-#loading[hidden]{display:none}
 @media (max-width:640px){
-  body{padding:.8rem}
-  h1{font-size:1.25rem}
+  body{padding:.5rem .8rem 2rem;font-size:12px}
   .lvl{display:flex;flex-wrap:wrap;gap:.2em .9em}
   .lvl label{margin-right:0}
-  .lvl input[type=radio]{width:20px;height:20px}
-  .lvl label{display:inline-flex;align-items:center;min-height:42px;padding:0 .3em}
-  .bar{width:9em}
-  .btn{padding:.45em .8em;font-size:1em;min-width:42px;min-height:42px;display:inline-flex;align-items:center;justify-content:center}
-  .sl{display:inline}
-  table,tbody,td{display:block;width:100%}
+  table,thead,tbody,tr,td{display:block}
   thead{display:none}
-  #tbl tr{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0;border:1px solid #2c3340;border-radius:10px;margin-bottom:.6rem;overflow:hidden}
-  #tbl tr:hover{background:#161b22}
-  #tbl td{border-bottom:none}
-  #tbl td:first-child{grid-column:1/-1;padding:.7rem .8rem .45rem}
-  #tbl td.num{padding:.55rem .6rem;border-top:1px solid #222831;text-align:center;white-space:nowrap}
-  .repotbl,.repotbl tbody,.repotbl td{display:block;width:100%}
-  .repotbl thead{display:none}
-  .repotbl tr{display:block;border:1px solid #2c3340;border-radius:10px;margin-bottom:.6rem;overflow:hidden}
-  .repotbl td{border-bottom:1px solid #222831;padding:.5rem .8rem}
-  .repotbl td:last-child{border-bottom:none}
+  tr{border:1px solid #2c3340;border-radius:10px;margin-bottom:.7rem;padding:.4em .7em;background:#161b22}
+  td{border:none;padding:.28em 0;display:flex;justify-content:space-between;align-items:center;gap:1em;text-align:right}
+  td.n{flex-direction:column;align-items:flex-start;gap:.35em}
+  td.n > *{width:100%}
+  .row0{background:#1c2431}
+  button{min-width:42px;min-height:42px;font-size:1.05em}
+  .toc a{min-height:42px;display:flex;align-items:center}
+  .lvl input{width:20px;height:20px}
+  .lvl label{display:flex;align-items:center;min-height:42px}
 }
-</style></head><body>
-<h1>model sizes</h1>
-<div id="disks"></div>
-<div class="lvl">show:
-<label><input type="radio" name="show" value="ssd" onchange="setShow('ssd')"> ssd</label>
-<label><input type="radio" name="show" value="hdd" onchange="setShow('hdd')"> hdd</label>
-<label><input type="radio" name="show" value="both" onchange="setShow('both')" checked> ssd+hdd</label>
+</style></head>
+<body>
+<div id="bar" class="bar"><i></i><span class="txt"></span></div>
+<div class="toc">
+  <h2>0-dash</h2>
+  <a href="#models" data-sec="models">models</a>
+  <a href="#containers" data-sec="containers">containers</a>
+  <a href="#repos" data-sec="repos">repos</a>
 </div>
-<div id="loading"><div class="spin"></div><div>scanning disks&#8230;</div></div>
-<div id="tbl"></div>
-<h2>repos</h2>
-<div id="repos"></div>
+
+<section id="models">
+  <div class="lvl">show:
+    <label><input type="radio" name="show" value="ssd" onchange="setShow('ssd')"></label>
+    <label><input type="radio" name="show" value="hdd" onchange="setShow('hdd')"></label>
+    <label><input type="radio" name="show" value="both" checked onchange="setShow('both')"></label>
+  </div>
+  <div class="kv" id="disks"></div>
+  <div id="sizes-err" class="err" hidden></div>
+  <div id="tbl"></div>
+</section>
+
+<section id="containers">
+  <h2>podman containers <span class="kv" id="ct-count" style="margin:0"></span></h2>
+  <div id="ct-err" class="err" hidden></div>
+  <div id="ct-tbl"></div>
+</section>
+
+<section id="repos">
+  <h2>repos</h2>
+  <div id="rep-err" class="err" hidden></div>
+  <div id="rep-tbl"></div>
+</section>
 <script>
-let rows = [];
-let show = 'both';
 const GB = 1073741824;
-function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-function setShow(v){ show = v; build(); }
-function copy(el){
-  const p = decodeURIComponent(el.dataset.p);
-  const done = () => { el.textContent='\u2713'; setTimeout(()=>el.textContent='\u29C9',1000); };
-  const fb = () => { const t=document.createElement('textarea'); t.value=p; document.body.appendChild(t); t.select(); document.execCommand('copy'); t.remove(); done(); };
-  if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(p).then(done).catch(fb); } else { fb(); }
+const fmt = n => {
+  const g = n / GB;
+  return (g >= 100 ? g.toFixed(0) : g >= 10 ? g.toFixed(1) : g.toFixed(2)) + " GB";
+};
+const LS_KEY = "dash0_v1";
+let rows = [];
+let show = "both";
+const LS = {
+  get(k) { try { const v = JSON.parse(localStorage.getItem(LS_KEY)); return v ? v[k] : null; } catch { return null; } },
+  set(k, v) {
+    try {
+      const o = JSON.parse(localStorage.getItem(LS_KEY) || "{}");
+      o[k] = v;
+      localStorage.setItem(LS_KEY, JSON.stringify(o));
+    } catch {}
+  },
+};
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+// top progress bar: active while any section is refreshing
+let active = 0;
+function barStart(label) {
+  active++;
+  $("bar").classList.remove("done");
+  $("bar").querySelector(".txt").textContent = label + " \u2014 updating";
 }
-function fmt(r){
-  if(show === 'ssd') return (r.ssd ? (r.ssd/GB).toFixed(1) : '\u2014') + ' <span class="none">ssd</span>';
-  if(show === 'hdd') return (r.hdd ? (r.hdd/GB).toFixed(1) : '\u2014') + ' <span class="none">hdd</span>';
-  return (r.ssd ? (r.ssd/GB).toFixed(1) : '\u2014') + ' / ' + (r.hdd ? (r.hdd/GB).toFixed(1) : '\u2014') + ' <span class="none">ssd/hdd</span>';
+function barDone() {
+  active = Math.max(0, active - 1);
+  if (active === 0) $("bar").classList.add("done");
 }
-function build(){
-  const kids1 = {}, kids2 = {}, p1 = {}, p0 = {};
-  for(const r of rows){
-    if(r.level === 1){ if(r.p0) (kids1[r.p0] = kids1[r.p0] || []).push(r); }
-    else if(r.level === 2){
-      if(r.p1) (kids2[r.p1] = kids2[r.p1] || []).push(r);
-      if(r.p1) (p1[r.p1] = p1[r.p1] || []).push(r.paths);
-      if(r.p0) (p0[r.p0] = p0[r.p0] || []).push(r.paths);
-    }
+function setBar(label) {
+  $("bar").classList.remove("done");
+  $("bar").querySelector(".txt").textContent = label + " \u2014 updating";
+}
+function barDoneAll() { active = 0; $("bar").classList.add("done"); }
+
+// TOC highlight
+const tocLinks = [...document.querySelectorAll(".toc a")];
+window.addEventListener("scroll", () => {
+  let cur = null;
+  for (const s of ["models", "containers", "repos"]) {
+    if (document.getElementById(s).getBoundingClientRect().top < 60) cur = s;
   }
-  const pathsFor = (r) => r.level === 2 ? r.paths
-    : r.level === 1 ? [...new Set((p1[r.key] || []).flat())].sort()
-    : [...new Set((p0[r.key] || []).flat())].sort();
-  const byMax = (a,b) => Math.max(b.ssd,b.hdd) - Math.max(a.ssd,a.hdd);
+  tocLinks.forEach(a => a.style.color = (a.dataset.sec === cur) ? "#7ec8ff" : "");
+}, { passive: true });
+function sizeCell(r) {
+  const f = x => { const g = x / GB; return (g >= 100 ? g.toFixed(0) : g >= 10 ? g.toFixed(1) : g.toFixed(2)); };
+  if (show === "ssd") return f(r.ssd) + " GB";
+  if (show === "hdd") return f(r.hdd) + " GB";
+  return f(r.ssd) + " / " + f(r.hdd) + " GB";
+}
+function headRow() {
+  if (show === "both") return "<tr><th class='n'>path</th><th>ssd / hdd GB</th></tr>";
+  return "<tr><th class='n'>path</th><th>" + show + " GB</th></tr>";
+}
+function warnSpan(r) {
+  return (r.dc > 0 && r.ssd > 0 && r.hdd > 0)
+    ? "<span class='warn' title='" + r.dc + " file(s) present on only one disk (ssd/hdd)'>\u26A0" + r.dc + "</span>"
+    : "";
+}
+function renderSizes() {
+  const kids1 = {}, kids2 = {};
+  for (const r of rows) {
+    if (r.level === 1) { if (r.p0) (kids1[r.p0] = kids1[r.p0] || []).push(r); }
+    else if (r.level === 2) { if (r.p1) (kids2[r.p1] = kids2[r.p1] || []).push(r); }
+  }
+  const byMax = (a, b) => Math.max(b.ssd, b.hdd) - Math.max(a.ssd, a.hdd);
   const out = [];
-  const warn = (r) => ((r.ssd > 0 && r.hdd > 0) ? ('<span class="disc" title="' + r.dc + ' file(s) present on one disk only">\u26A0' + r.dc + '</span>') : '');
   const emit = (r, indent) => {
-    const kids = r.level === 0 ? (kids1[r.key]||[]) : r.level === 1 ? (kids2[r.key]||[]) : null;
-    const paths = pathsFor(r);
-    out.push(
-      '<tr><td>' + (indent ? '<span style="color:#445;padding-left:' + indent*1.5 + 'em;display:inline-block"></span>' : '') +
-      '<span class="nm">' + esc(r.name) + '</span>' +
-      '<button class="btn r" data-p="' + encodeURIComponent(paths.join('\n')) + '" onclick="copy(this)">\u29C9</button></td>' +
-      '<td class="num">' + fmt(r) + warn(r) + '</td></tr>'
-    );
-    if(kids){ for(const c of [...kids].sort(byMax)) emit(c, indent + 1); }
+    const kids = r.level === 0 ? (kids1[r.key] || []) : r.level === 1 ? (kids2[r.key] || []) : null;
+    const name = r.level === 2 && r.paths ? r.paths.join(", ") : r.name;
+    out.push("<tr class='row" + r.level + "' data-level='" + r.level + "' data-p='" +
+      encodeURIComponent((r.paths || []).join("\n")) + "' data-key='" + encodeURIComponent(r.key) + "'>" +
+      "<td class='n'><span style='" + (indent ? "margin-left:" + indent * 1.5 + "em" : "") + "'>" +
+      esc(name) + warnSpan(r) + "</span>" +
+      "<button class='cp' title='copy path' onclick='copyP(event)'>&#10697;</button></td>" +
+      "<td>" + sizeCell(r) + "</td></tr>");
+    if (kids) for (const c of [...kids].sort(byMax)) emit(c, indent + 1);
   };
-  for(const r of [...rows.filter(x => x.level === 0)].sort(byMax)) emit(r, 0);
-  const head = show === 'ssd' ? 'ssd GB' : show === 'hdd' ? 'hdd GB' : 'ssd / hdd GB';
-  document.getElementById('tbl').innerHTML =
-    '<table><thead><tr><th>path</th><th class="num">' + head + '</th></tr></thead><tbody>' + out.join('') + '</tbody></table>';
-  document.getElementById('loading').hidden = true;
+  for (const r of rows.filter(x => x.level === 0).sort(byMax)) emit(r, 0);
+  $("tbl").innerHTML = "<table><thead>" + headRow() + "</thead><tbody>" + out.join("") + "</tbody></table>";
 }
-fetch('/api/disks').then(r=>r.json()).then(dk=>{
-  document.getElementById('disks').innerHTML = dk.disks.map(d=>{
-    const pct = Math.round(d.used_gb/d.total_gb*100);
-    return '<p>' + d.mount + ': ' + d.used_gb + ' / ' + d.total_gb + ' GB (' + pct + '%)' +
-      ' <span class="bar"><i style="width:' + pct + '%"></i></span></p>';
-  }).join('');
-}).catch(e=>{ const l=document.getElementById('loading'); l.innerHTML='<div style="color:#f55">disk info error: ' + esc(String(e)) + '</div>'; });
-fetch('/api/sizes').then(r=>r.json()).then(sz=>{
-  rows = sz.entries;
-  build();
-}).catch(e=>{ const l=document.getElementById('loading'); l.innerHTML='<div style="color:#f55">scan error: ' + esc(String(e)) + '</div>'; });
-function freshTxt(w){
-  if(w.prunable) return '<span class="none">prunable</span>';
-  if(w.fresh === true)  return '<span class="fresh">fresh</span>';
-  if(w.fresh === false) return '<span class="stale">stale' + ((w.ahead||w.behind)? ' (' + (w.ahead||0) + '/' + (w.behind||0) + ')' : '') + '</span>';
-  return '<span class="none">no remote</span>';
+window.copyP = function(e) {
+  const row = e.currentTarget.closest("tr");
+  let p = row.dataset.p;
+  if (row.dataset.level === "2") {
+    p = decodeURIComponent(row.dataset.p);
+  } else {
+    const lvl = row.dataset.level, key = decodeURIComponent(row.dataset.key);
+    p = rows.filter(r => r.level === 2 && (lvl === "1" ? r.p1 === key : r.p0 === key))
+      .flatMap(r => r.paths || []).join("\n");
+  }
+  const t = document.createElement("textarea");
+  t.value = p;
+  document.body.appendChild(t);
+  t.select();
+  try { document.execCommand("copy"); } catch {}
+  t.remove();
+  e.currentTarget.textContent = "\u2713";
+  setTimeout(() => { e.currentTarget.innerHTML = "&#10697;"; }, 900);
+};
+
+function renderContainers(cs) {
+  const running = cs.filter(c => c.state === "running").length;
+  $("ct-count").innerHTML = running + " running / " + cs.length + " total";
+  const st = s => s === "running" ? "<span class='fresh'>running</span>"
+    : s === "exited" ? "<span class='none'>exited</span>"
+    : "<span class='stale'>" + esc(s) + "</span>";
+  $("ct-tbl").innerHTML = "<table><thead><tr><th class='n'>name</th><th class='n'>image</th><th class='n'>state</th><th class='n'>status</th></tr></thead><tbody>" +
+    cs.map(c => "<tr><td class='n'>" + esc(c.name) + "</td><td class='n'>" + esc(c.image) + "</td><td class='n'>" + st(c.state) + "</td><td class='n'>" + esc(c.status) + "</td></tr>").join("") + "</tbody></table>";
 }
-function dirtyTxt(w){
-  const parts = [];
-  if(w.unstaged) parts.push('<span class="mt">' + w.unstaged + ' unstaged</span>');
-  if(w.staged)   parts.push('<span class="mt">' + w.staged + ' staged</span>');
-  return parts.join('');
+function renderRepos(d) {
+  let html = "";
+  for (const rep of d.repos) {
+    html += "<h3>" + esc(rep.name) + "</h3>";
+    html += "<table class='repotbl'><thead><tr><th class='n'>worktree</th><th class='n'>branch</th><th class='n'>head</th><th class='n'>vs remote</th><th class='n'>worktree state</th></tr></thead><tbody>";
+    for (const w of rep.worktrees) {
+      let rem = "<span class='none'>no remote</span>";
+      if (w.remote)
+        rem = w.fresh ? "<span class='fresh'>fresh</span> <span class='none'>(" + esc(w.remote) + ")</span>"
+                      : "<span class='stale'>stale</span> <span class='none'>(" + esc(w.remote) + ")</span>";
+      let mt = "clean";
+      if (!w.prunable) {
+        const p = [];
+        if (w.staged) p.push("<span class='mt'>" + w.staged + " staged</span>");
+        if (w.unstaged) p.push("<span class='mt'>" + w.unstaged + " unstaged</span>");
+        mt = p.join(" ") || "clean";
+      }
+      html += "<tr><td class='n'>" + esc(w.wt) + "</td>" +
+              "<td class='n'>" + (w.branch ? esc(w.branch) : "<span class='none'>(detached)</span>") + "</td>" +
+              "<td class='n'>" + esc(w.head) + "</td>" +
+              "<td class='n'>" + rem + "</td>" +
+              "<td class='n'>" + (w.prunable ? "<span class='stale'>prunable</span>" : mt) + "</td></tr>";
+    }
+    html += "</tbody></table>";
+  }
+  $("rep-tbl").innerHTML = html;
 }
-fetch('/api/repos').then(r=>r.json()).then(d=>{
-  const html = d.repos.map(rep=>{
-    if(rep.error) return '<h3>' + esc(rep.name) + '</h3><p class="mt">' + esc(rep.error) + '</p>';
-    const trs = rep.worktrees.map(w=>
-      '<tr><td>' + esc(w.path.replace(/^\/home\/nixos\//,'')) + '</td>' +
-      '<td>' + esc(w.branch||'(detached)') + ' <span class="none">' + esc(w.head) + '</span></td>' +
-      '<td>' + freshTxt(w) + '</td>' +
-      '<td>' + (w.unstaged==null?'':(w.unstaged+w.staged? dirtyTxt(w):'<span class="none">clean</span>')) + '</td></tr>'
-    ).join('');
-    return '<h3>' + esc(rep.name) + '</h3><table class="repotbl"><thead><tr><th>worktree</th><th>branch</th><th>vs remote</th><th>working tree</th></tr></thead><tbody>' + trs + '</tbody></table>';
-  }).join('');
-  document.getElementById('repos').innerHTML = html;
-}).catch(e=>{ document.getElementById('repos').innerHTML='<p class="mt">repos error: ' + esc(String(e)) + '</p>'; });
+
+// each section: instant cache render, then independent background refresh
+function refreshSec(name, url, renderFn, errId, cacheKey) {
+  const cached = LS.get(cacheKey);
+  if (cached) { try { renderFn(cached); } catch {} }
+  const err = $(errId);
+  err.hidden = true; err.textContent = "";
+  setBar(name);
+  fetch(url, { cache: "no-store" }).then(r => {
+    if (!r.ok) throw new Error(r.status + " " + r.statusText);
+    return r.json();
+  }).then(d => {
+    LS.set(cacheKey, d);
+    renderFn(d);
+    barDoneAll();
+  }).catch(e => {
+    err.hidden = false;
+    err.textContent = name + ": " + e.message + " \u2014 showing cached data" +
+      (cached ? "" : " (no cache)");
+    barDoneAll();
+  });
+}
+
+refreshSec("models", "/api/sizes", d => { rows = d.entries; renderSizes(); }, "sizes-err", "sizes");
+refreshSec("containers", "/api/containers", d => renderContainers(d.containers), "ct-err", "containers");
+refreshSec("repos", "/api/repos", renderRepos, "rep-err", "repos");
+fetch("/api/disks").then(r => r.json()).then(d => {
+  $("disks").innerHTML = d.disks.map(x => x.disk + ": " + x.used_gb + "G / " + x.total_gb + "G").join("  ");
+}).catch(() => {});
+
+function setShow(v) { show = v; renderSizes(); }
 </script>
 </body></html>

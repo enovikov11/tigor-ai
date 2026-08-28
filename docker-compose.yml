@@ -99,6 +99,7 @@ services:
     ports:
       - "1337:1337"
     volumes:
+      - /run/user/1000/podman/podman.sock:/run/podman/podman.sock:ro
       - /hdd/public/internet:/hdd/public/internet:ro
       - /ssd/public/internet:/ssd/public/internet:ro
       - /home/nixos/tigor-ai:/home/nixos/tigor-ai:ro
