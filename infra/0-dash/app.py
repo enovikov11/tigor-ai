@@ -19,6 +19,17 @@ DF = "df -B1 " + " ".join(r for _, r in ROOTS)
 QUANT = re.compile(r"(?<![A-Za-z0-9])((?:UD-)?(?:MXFP4|I?Q\d+|F\d+|BF16|FP16|FP32)(?:_[A-Z0-9]+)*)", re.I)
 
 app = FastAPI()
+_SIZES_CACHE = {"at": 0, "data": None}
+_SIZES_TTL = 30
+
+def _sizes_cached():
+    import time
+    now = time.time()
+    if _SIZES_CACHE["data"] is None or now - _SIZES_CACHE["at"] > _SIZES_TTL:
+        _SIZES_CACHE["data"] = build_rows()
+        _SIZES_CACHE["at"] = now
+    return _SIZES_CACHE["data"]
+
 REPOS = {
     "tigor-ai": "/home/nixos/tigor-ai",
     "tigor-no-ai": "/home/nixos/tigor-no-ai",
@@ -123,21 +134,43 @@ def quant_of(path: str) -> str:
     return ""
 
 
+CANDIDATES = [("ssd", "/ssd/public/internet"), ("hdd", "/hdd/public/internet")]
+
 @app.get("/api/disks")
 def disks():
-    p = subprocess.run(["sh", "-c", DF], capture_output=True, text=True, timeout=30)
     out = []
-    for line in p.stdout.splitlines()[1:]:
-        f = line.split()
-        if len(f) < 6:
+    for name, cand in CANDIDATES:
+        # df on any mounted path reports the whole filesystem it lives on
+        if not os.path.exists(cand):
+            out.append({"disk": name, "available": False})
             continue
-        mount = f[5]
-        for name, root in ROOTS:
-            if mount == root:
-                out.append({"disk": name, "mount": mount,
-                            "total_gb": int(f[1]) // 2**30,
-                            "used_gb": int(f[2]) // 2**30})
+        p = subprocess.run(["df", "-B1", cand], capture_output=True, text=True, timeout=30)
+        lines = p.stdout.splitlines()
+        if len(lines) < 2:
+            out.append({"disk": name, "available": False})
+            continue
+        f = lines[1].split()
+        total, used, free = int(f[1]), int(f[2]), int(f[3])
+        out.append({"disk": name, "available": True, "mount": cand,
+                    "total_gb": total // 2**30,
+                    "used_gb": used // 2**30,
+                    "free_gb": free // 2**30})
     return {"disks": out}
+
+@app.get("/api/diskusage")
+def diskusage():
+    d = disks()["disks"]
+    for row in d:
+        row["model_ssd_b"] = 0
+        row["model_hdd_b"] = 0
+    for r in _sizes_cached()["entries"]:
+        if r["level"] == 0:
+            for row in d:
+                if row["disk"] == "ssd":
+                    row["model_ssd_b"] += r["ssd"]
+                elif row["disk"] == "hdd":
+                    row["model_hdd_b"] += r["hdd"]
+    return {"disks": d}
 
 
 def common_dir(dirs):

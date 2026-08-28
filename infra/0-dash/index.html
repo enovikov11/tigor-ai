@@ -35,6 +35,18 @@ button:hover{background:#30363d}
 .repotbl{margin-top:.5rem}
 .fresh{color:#4a4}.stale{color:#f80}.none{color:#666}
 .mt{color:#f55;margin-left:.5em;font-size:.9em}
+.dbar{height:10px;background:#12161d;border-radius:6px;overflow:hidden;margin:.4rem 0}
+.dbar i{display:block;height:100%;background:linear-gradient(90deg,#2a9d8f,#e9c46a);border-radius:6px}
+.disk{background:#171c24;border:1px solid #222938;border-radius:12px;padding:.8rem 1rem;margin-bottom:.8rem}
+.dh{display:flex;justify-content:space-between;align-items:baseline;gap:1rem;flex-wrap:wrap}
+.dh b{font-size:1.05rem}
+.dk{display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem;margin:.5rem 0}
+.dk div{background:#12161d;border-radius:8px;padding:.45rem .6rem}
+.dk span{font-size:.65rem;color:#66707f;display:block}
+.dk b{font-size:.95rem}
+.dm{font-size:.72rem;color:#9aa5b5}
+.dm b{color:#e9c46a}
+.nod{color:#66707f;font-size:.85rem}
 @media (max-width:640px){
   body{padding:.5rem .8rem 2rem;font-size:12px}
   .lvl{display:flex;flex-wrap:wrap;gap:.2em .9em}
@@ -48,6 +60,9 @@ button:hover{background:#30363d}
   .row0{background:#1c2431}
   button{min-width:42px;min-height:42px;font-size:1.05em}
   .toc a{min-height:42px;display:flex;align-items:center}
+  td.n > span[style]{margin-left:0!important;display:block}
+  .warn{display:inline-block;white-space:normal}
+  td,th{white-space:normal;overflow-wrap:anywhere}
   .lvl input{width:20px;height:20px}
   .lvl label{display:flex;align-items:center;min-height:42px}
 }
@@ -56,18 +71,25 @@ button:hover{background:#30363d}
 <div id="bar" class="bar"><i></i><span class="txt"></span></div>
 <div class="toc">
   <h2>0-dash</h2>
+  <a href="#disks" data-sec="disks">disks</a>
   <a href="#models" data-sec="models">models</a>
   <a href="#containers" data-sec="containers">containers</a>
   <a href="#repos" data-sec="repos">repos</a>
 </div>
 
+<section id="disks">
+  <h2>disks</h2>
+  <div class="err" id="du-err" hidden></div>
+  <div id="disksBody"></div>
+</section>
+
 <section id="models">
+  <h2>models</h2>
   <div class="lvl">show:
     <label><input type="radio" name="show" value="ssd" onchange="setShow('ssd')"></label>
     <label><input type="radio" name="show" value="hdd" onchange="setShow('hdd')"></label>
     <label><input type="radio" name="show" value="both" checked onchange="setShow('both')"></label>
   </div>
-  <div class="kv" id="disks"></div>
   <div id="sizes-err" class="err" hidden></div>
   <div id="tbl"></div>
 </section>
@@ -126,7 +148,7 @@ function barDoneAll() { active = 0; $("bar").classList.add("done"); }
 const tocLinks = [...document.querySelectorAll(".toc a")];
 window.addEventListener("scroll", () => {
   let cur = null;
-  for (const s of ["models", "containers", "repos"]) {
+  for (const s of ["disks", "models", "containers", "repos"]) {
     if (document.getElementById(s).getBoundingClientRect().top < 60) cur = s;
   }
   tocLinks.forEach(a => a.style.color = (a.dataset.sec === cur) ? "#7ec8ff" : "");
@@ -247,12 +269,33 @@ function refreshSec(name, url, renderFn, errId, cacheKey) {
   });
 }
 
+function renderDisks(d) {
+  let html = "";
+  for (const x of d.disks) {
+    if (!x.available) {
+      html += '<div class="disk"><div class="dh"><b>' + esc(x.disk) + '</b><span class="nod">not mounted</span></div></div>';
+      continue;
+    }
+    const pct = x.total_gb ? Math.min(100, (x.used_gb / x.total_gb) * 100) : 0;
+    const mb = x.disk === "ssd" ? x.model_ssd_b : x.model_hdd_b;
+    const mgb = mb / 1073741824;
+    const mOf = x.used_gb ? (mgb / x.used_gb * 100) : 0;
+    html += '<div class="disk"><div class="dh"><b>' + esc(x.disk) + ' <span style="color:#66707f;font-weight:400">' + esc(x.mount) + '</span></b>'
+          + '<span class="dm">' + pct.toFixed(0) + '% used</span></div>'
+          + '<div class="dbar"><i style="width:' + pct.toFixed(1) + '%"></i></div>'
+          + '<div class="dk">'
+          + '<div><span>total</span><b>' + x.total_gb + ' G</b></div>'
+          + '<div><span>used</span><b>' + x.used_gb + ' G</b></div>'
+          + '<div><span>free</span><b>' + x.free_gb + ' G</b></div>'
+          + '</div>'
+          + '<div class="dm">models on this disk: <b>' + (mgb >= 100 ? mgb.toFixed(0) : mgb.toFixed(1)) + ' G</b> (' + mOf.toFixed(0) + '% of used)</div></div>';
+  }
+  $("disksBody").innerHTML = html;
+}
+refreshSec("disks", "/api/diskusage", renderDisks, "du-err", "disks");
 refreshSec("models", "/api/sizes", d => { rows = d.entries; renderSizes(); }, "sizes-err", "sizes");
 refreshSec("containers", "/api/containers", d => renderContainers(d.containers), "ct-err", "containers");
 refreshSec("repos", "/api/repos", renderRepos, "rep-err", "repos");
-fetch("/api/disks").then(r => r.json()).then(d => {
-  $("disks").innerHTML = d.disks.map(x => x.disk + ": " + x.used_gb + "G / " + x.total_gb + "G").join("  ");
-}).catch(() => {});
 
 function setShow(v) { show = v; renderSizes(); }
 </script>
