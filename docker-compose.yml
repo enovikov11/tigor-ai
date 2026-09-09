@@ -11,8 +11,8 @@ services:
       PYTORCH_ALLOC_CONF: expandable_segments:True
       VLLM_LOGGING_LEVEL: INFO
     volumes:
-      - /ssd/public/internet/huggingface.co:/huggingface.co:ro
-      - /home/nixos/data-vllm:/root/.cache/vllm
+      - /ssd/public/ro/internet/huggingface.co:/huggingface.co:ro
+      - /home/nixos/data/vllm-cache:/root/.cache/vllm
     shm_size: 16g
     ports:
       - "8000:8000"
@@ -75,7 +75,7 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      - /home/nixos/data-forgejo:/data
+      - /home/nixos/data/forgejo:/data
 
   hermes:
     container_name: hermes
@@ -123,8 +123,8 @@ services:
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile
       - /home/nixos/tigor-ai.worktrees/public-http-pages:/srv/data:ro
-      - /home/nixos/data-caddy/data:/data
-      - /home/nixos/data-caddy/config:/config
+      - /home/nixos/data/caddy/data:/data
+      - /home/nixos/data/caddy/config:/config
     ports:
       - "80:80"
       - "443:443" 
