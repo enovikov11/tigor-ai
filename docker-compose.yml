@@ -55,8 +55,8 @@ services:
       VLLM_OMNI_VIDEO_SYNC_TIMEOUT: "14400"
       CUDA_VISIBLE_DEVICES: "0"
     volumes:
-      - /hdd/public/internet/huggingface.co/MiniMaxAI/MiniMax-H3:/MiniMax-H3:ro
-      - /home/nixos/minimax-h3-output:/output
+      - /hdd/public/ro/internet/huggingface.co/MiniMaxAI/MiniMax-H3:/MiniMax-H3:ro
+      - /home/nixos/data/minimax-h3-output:/output
     command: >
       vllm serve /MiniMax-H3
       --omni
@@ -92,7 +92,7 @@ services:
       HERMES_DASHBOARD: "1"
     command: ["gateway", "run"]
 
-  0-dash:
+  dash:
     container_name: 0-dash
     build: ./infra/0-dash
     restart: unless-stopped
@@ -100,13 +100,8 @@ services:
       - "1337:1337"
     volumes:
       - /run/user/2000/podman/podman.sock:/run/podman/podman.sock:ro
-      - /hdd/public/internet:/hdd/public/internet:ro
-      - /ssd/public/internet:/ssd/public/internet:ro
-      - /home/nixos/tigor-ai:/home/nixos/tigor-ai:ro
-      - /home/nixos/tigor-ai.worktrees:/home/nixos/tigor-ai.worktrees:ro
-      - /home/nixos/tigor-no-ai:/home/nixos/tigor-no-ai:ro
-      - /home/nixos/tigor-no-ai.worktrees:/home/nixos/tigor-no-ai.worktrees:ro
-      - /home/nixos/tigor-no-ai.pr29:/home/nixos/tigor-no-ai.pr29:ro
+      - /hdd/public/ro/internet:/hdd/public/internet:ro
+      - /ssd/public/ro/internet:/ssd/public/internet:ro
 
   caddy:
     container_name: caddy
