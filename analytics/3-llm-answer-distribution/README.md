@@ -37,6 +37,11 @@ frontier.
   runs ~500 live expansions, asserts the mass ledger stays ≈1.0 (drift < 1e-6;
   ~1e-9 float eps is expected) and prints the emerging answer ranking.
   Run this before any long run.
+- `sample100.py` — cross-validation: N real samples (temp 1.0, same
+  no-reasoning flag), extracts the first in-range number per response,
+  prints the empirical distribution. ALWAYS compare with the walk —
+  sampling at temp 1.0 is noisy (±8pp at n=100) and put 17 at 61% while
+  the true mass is split 23/17.
 - `plot_final.py` — two-panel report (matplotlib, run in a python:3.12-slim
   container; host has no matplotlib).
 - `Dockerfile` — python:3.12-slim + worker + query, `/data` volume for the DB.
