@@ -88,6 +88,7 @@ approvals:
   timeout: 604800
 command_allowlist:
   - script execution via heredoc
+  - delete in root path
 security:
   redact_secrets: false
 code_execution:
@@ -103,7 +104,7 @@ updates:
   pre_update_backup: false
   backup_keep: 5
   non_interactive_local_changes: stash
-_config_version: 38
+_config_version: 41
 model_aliases:
   local:
     model: Qwen3.8-27B-FP8
