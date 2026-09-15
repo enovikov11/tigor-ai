@@ -40,6 +40,7 @@ services:
       --kv-cache-metrics-sample 0.01
       --enable-prefix-caching
       --performance-mode interactivity
+      --max-logprobs -1
 
   vllm-omni:
     container_name: vllm-omni

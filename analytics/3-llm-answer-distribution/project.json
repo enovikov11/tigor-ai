@@ -1,0 +1,1 @@
+{"use": "live", "stage": "done", "description": "Full probability distribution of a local LLM's answer over its answer space: best-first Markov walk over vLLM logprobs with bucket queue, first-number absorption, coverage-based stop, SQLite persistence and on-demand query/report CLI"}
