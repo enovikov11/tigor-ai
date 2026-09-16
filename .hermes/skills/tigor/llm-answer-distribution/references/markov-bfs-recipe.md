@@ -2,25 +2,25 @@
 
 Goal: approximate P(answer) for a prompt like "Pick a number between 10 and 30" without sampling, by walking the model's own token distributions. Cross-validate with real sampling always.
 
-## Request shape — raw /v1/completions, open assistant turn (CRITICAL)
+## Request shape — raw /v1/completions, open assistant turn, server-rendered BASE (CRITICAL)
 
 ```python
+# BASE rendered by the SAME tokenizer/template the server uses — never hand-rolled
+BASE = tokenizer.apply_chat_template(
+    [{"role": "user", "content": PROMPT}],
+    add_generation_prompt=True, tokenize=False, enable_thinking=False)
 body = {
-  "model": "/models/Qwen3.8-27B-FP8",
-  "messages": [
-    {"role": "user", "content": PROMPT},
-    {"role": "assistant", "content": prefix, "partial": True},  # partial prefix walk
-  ],
+  "model": "Qwen3.8-27B-FP8",
+  "prompt": BASE + prefix,       # assistant turn left OPEN; prefix appended raw
   "max_tokens": 1,
-  "temperature": 1.0,
-  "chat_template_kwargs": {"enable_thinking": False},
-  "logprobs": True,
-  "top_logprobs": 500,         # heap walk: top-500 suffices (16 KB, 0.33 s). -1 = full vocab, needs --max-logprobs -1, ~21 MB / 4.7 s
-  "stream": False,
+  "logprobs": 500,               # top-K; 16 KB, 0.33 s. -1 = full vocab, needs --max-logprobs -1, ~21 MB / 4.7 s
+  "temperature": 0.0,
 }
-# POST http://127.0.0.1:8000/v1/chat/completions
-# response.choices[0].logprobs.content[0].tokens / .logprobs  (token, logprob pairs, all 248k)
+# POST http://127.0.0.1:8000/v1/completions
+# response.choices[0].logprobs.top_logprobs[0]  (dict: token -> logprob)
 ```
+
+NEVER `/v1/chat/completions` for the walk, and never a hand-rolled BASE from template knowledge: a closed assistant turn (`...I<im_end>`) makes the model restart instead of continue (digit-spam), and a hand-rolled empty-think BASE passed the argmax preflight yet shifted the root distribution enough to swap top-2 answer mass — bare-digit start probability inflated 3×, caught only by a 1000-sample cross-validation. Preflight both levels: (a) argmax continuity (greedy step-1 token at the top of the prefix feed) and (b) distributional — top-10 (token, prob) of root + 2-3 shallow prefixes must agree to ~1e-4 between your completions BASE and the server's own chat/completions for the same prefix.
 
 Each call returns the top-N distribution over the next token given the prefix. With `top_logprobs: 500`: ~16 KB, 0.33 s, ~45 expansions/s at 16 concurrent in flight — the heap walk only needs the top-K children plus the stop token, and the residual mass `1 − p_stop − Σ p_kids` is booked as pruned. Full vocab (`-1`) is ~21 MB / 4.7 s per call; use it only for arbitrary-token lookups. Concurrency: see the absorption loop below (perpetually-16-in-flight, not batched barriers).
 
@@ -84,9 +84,11 @@ Do NOT extract "the first in-range number" and call the chain valid — multiple
 
 ## Cross-validation (mandatory)
 
-100 real samples, same prompt, same `enable_thinking: False`, temperature 1.0, `max_tokens: 128`, N=100 loop (serial is fine, ~1-3 s each). Count answers by the same regex. Compare: spike location, top-2 mass, invalid rate.
+N real samples, same prompt, same no-reasoning setting, temperature 1.0, `max_tokens: 128`. Extract the answer by the same regex over the CONCATENATION of the `reasoning` and `content` message fields (the server's reasoning parser can put early tokens in `reasoning` even with thinking off — the number can live there). Compare: spike location, top-2 mass, invalid rate.
 
-Known-good shape (this model): a single value spikes (~70-80%), 2-3 neighbors get the rest, bare-digit chains and prose-wrapped answers disagree — the prose-wrapped (walked) chain and the real samples should agree within a few points; the first-token-only chain will not.
+Noise band: sampling error ≈ 2·√(p(1−p)/n) — ±6pp at n=100, ±2pp at n=1000. If the walk-vs-sample top-1 gap exceeds the band, it is a prompt-shape/template bug, NOT noise: escalate to 10× n to confirm, then re-derive the walk's BASE. A ~30pp gap at n=1000 is a bug, full stop. Returned logprobs are identical at any requested temperature (bit-equal at temp 0 vs 1, verified), so walk-at-0 / sample-at-1 needs no normalization.
+
+Known-good shape (this model, correct template): one value spikes (17 ≈ 55-60%), 2-3 neighbors get the rest (23 ≈ 17%, 21 ≈ 10%); a wrong template inflates bare-digit starts and swaps/deflates the prose-wrapped spike.
 
 ## Running long
 
@@ -101,7 +103,7 @@ For multi-hour runs, package as a podman worker (verified pattern):
 - Query CLI in the same image: `podman exec <c> python3 /app/query.py status|answers|progress|rate|chains|answer N`.
 - `podman stop` may fall back to SIGKILL after 10 s; `podman rm` before reusing the container name.
 
-Live snapshot for the user (on demand): pull the last progress row + per-answer sums, then render the user's two-panel spec — top panel: linear % of RESULTS ONLY, bars for 10..30 ascending, values as % of the valid total; bottom panel: LOG scale, bars of every category as % of total mass (1.0) — valid total, each invalid verdict (OUT_OF_RANGE, MULTIPLE_NUMBERS, LEN_EXCEEDED), invalid total, dropped tail (pruned), todo (frontier). One uniform color per panel, % value labels (small ones rotated), title carries exp count + wall time + timestamp. The dropped-tail/todo bars are usually the biggest; that is the honest picture, don't normalize it away. Absolute numbers on request: express per 1,000,000 (x,xxx,xxx format).
+Live snapshot for the user (on demand): pull the last progress row + per-answer sums, then render the user's two-panel spec — top panel: linear % of RESULTS ONLY, bars for 10..30 ascending, values as % of the valid total; bottom panel: LINEAR (user spec — never log scale), bars of every category as % of total mass (1.0) — valid total, each invalid verdict (OUT_OF_RANGE, MULTIPLE_NUMBERS, LEN_EXCEEDED), invalid total, dropped tail (pruned), todo (frontier). One uniform color per panel, % value labels (small ones rotated), title carries exp count + wall time + timestamp. The dropped-tail/todo bars are usually the biggest; that is the honest picture, don't normalize it away. Absolute numbers on request: express per 1,000,000 (x,xxx,xxx format).
 
 Lightweight alternative: `nohup python3 markov_full.py > markov_full.log 2>&1 &` via terminal background + notify.
 - Block-buffered stdout: log stays empty until exit. Not a hang. `python3 -u` or explicit flush for live logs.
