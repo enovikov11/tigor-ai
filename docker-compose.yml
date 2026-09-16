@@ -1,7 +1,7 @@
 services:
   vllm:
     container_name: vllm
-    image: docker.io/vllm/vllm-openai:nightly
+    image: docker.io/vllm/vllm-openai:v0.29.0
     restart: unless-stopped
     devices:
       - nvidia.com/gpu=all

@@ -2,27 +2,32 @@
 
 Goal: approximate P(answer) for a prompt like "Pick a number between 10 and 30" without sampling, by walking the model's own token distributions. Cross-validate with real sampling always.
 
-## Request shape — raw /v1/completions, open assistant turn, server-rendered BASE (CRITICAL)
+## Request shape — raw /v1/completions, open assistant turn, token-ID prompt (CRITICAL)
+
+vLLM ≥ 0.29 schema: `logprobs` is a single int count. The old `logprobs: true, top_logprobs: N` form is SILENTLY ignored (returns 1–2 random tokens, non-deterministic — corrupts the walk while conservation still balances), and the `-1` sentinel is dead (0 entries). Full vocab = `logprobs: 200000` → 199,307 entries, ~6 MB, ~2 s.
 
 ```python
-# BASE rendered by the SAME tokenizer/template the server uses — never hand-rolled
-BASE = tokenizer.apply_chat_template(
-    [{"role": "user", "content": PROMPT}],
-    add_generation_prompt=True, tokenize=False, enable_thinking=False)
+# Template captured ONCE as plain ints — no special-token strings in the worker:
+# BASE_IDS = tok.encode(tok.apply_chat_template(
+#     [{"role": "user", "content": PROMPT}],
+#     add_generation_prompt=True, tokenize=False, enable_thinking=False))
+# Qwen3.8-27B-FP8 + the number prompt:
+# [248045, 846, 198, 35728, 264, 1324, 1881, 220, 16, 15, 321, 220, 18, 15,
+#  248046, 198, 248045, 74455, 198, 248068, 271, 248069, 271]
 body = {
   "model": "Qwen3.8-27B-FP8",
-  "prompt": BASE + prefix,       # assistant turn left OPEN; prefix appended raw
+  "prompt": BASE_IDS + tokenize(prefix)["tokens"],   # /tokenize: plain-text prefixes only
   "max_tokens": 1,
-  "logprobs": 500,               # top-K; 16 KB, 0.33 s. -1 = full vocab, needs --max-logprobs -1, ~21 MB / 4.7 s
+  "logprobs": 500,    # int count (0.29). -1 is dead; full vocab = 200000 (~6 MB, ~2 s)
   "temperature": 0.0,
 }
 # POST http://127.0.0.1:8000/v1/completions
 # response.choices[0].logprobs.top_logprobs[0]  (dict: token -> logprob)
 ```
 
-NEVER `/v1/chat/completions` for the walk, and never a hand-rolled BASE from template knowledge: a closed assistant turn (`...I<im_end>`) makes the model restart instead of continue (digit-spam), and a hand-rolled empty-think BASE passed the argmax preflight yet shifted the root distribution enough to swap top-2 answer mass — bare-digit start probability inflated 3×, caught only by a 1000-sample cross-validation. Preflight both levels: (a) argmax continuity (greedy step-1 token at the top of the prefix feed) and (b) distributional — top-10 (token, prob) of root + 2-3 shallow prefixes must agree to ~1e-4 between your completions BASE and the server's own chat/completions for the same prefix.
+`BASE_IDS + tokenize(prefix)` is byte-identical to whole-string tokenization (verified 16/16 real prefixes incl. newlines, unicode quotes, `**` — no BPE merge at the boundary). 0.29's `/tokenize` maps special tokens only at the start of a string, so it tokenizes plain generated prefixes, never the template. Preflight per server, **value-based, never list-order** (the 0.29 chat endpoint shuffles top_logprobs order between identical calls): root p('I') ≈ 0.655 (a wrong template gave 0.356) and top-token mass within 0.02 of the server's own chat/completions route for the root + 2-3 shallow prefixes. NEVER `/v1/chat/completions` for the walk itself: a closed assistant turn (`...I<im_end>`) makes the model restart instead of continue (digit-spam) while mass conservation still balances to 1.0 — the bug is caught only by the sample cross-validation.
 
-Each call returns the top-N distribution over the next token given the prefix. With `top_logprobs: 500`: ~16 KB, 0.33 s, ~45 expansions/s at 16 concurrent in flight — the heap walk only needs the top-K children plus the stop token, and the residual mass `1 − p_stop − Σ p_kids` is booked as pruned. Full vocab (`-1`) is ~21 MB / 4.7 s per call; use it only for arbitrary-token lookups. Concurrency: see the absorption loop below (perpetually-16-in-flight, not batched barriers).
+Each call returns the top-N distribution over the next token given the prefix. With `logprobs: 500`: ~160 KB, ~2 s (GPU compute-bound — payload size barely matters), ~30–50 expansions/s at 8–16 concurrent in flight — the heap walk only needs the top-K children plus the stop token, and the residual mass `1 − p_stop − Σ p_kids` is booked as pruned. Full vocab is `logprobs: 200000` (199,307 non-zero entries, ~6 MB, ~2 s); use it only for arbitrary-token lookups. Choosing k: measure per-node coverage on real nodes — number branches are steep (top-30 ≈ 99.99%) and flat prose nodes carry the tail (top-300 ≈ 99.0%, top-500 ≈ 99.3%); 500 is the sweet spot, 300 the floor, 1000 diminishing. Concurrency: see the absorption loop below (perpetually-N-in-flight, not batched barriers).
 
 Stop token on this server: `<|im_end|>` (pipes) — build via `chr(60)+chr(124)+"im_end"+chr(124)+chr(62)`; verify by scanning the head distribution for 'im_end'.
 
@@ -102,6 +107,8 @@ For multi-hour runs, package as a podman worker (verified pattern):
 - Fresh DB filename per task (e.g. markov_strict.db; rename old runs, don't reuse) — never resume a stale run's DB.
 - Query CLI in the same image: `podman exec <c> python3 /app/query.py status|answers|progress|rate|chains|answer N`.
 - `podman stop` may fall back to SIGKILL after 10 s; `podman rm` before reusing the container name.
+- Main-loop structure: keep `submit_next()` (refill) and `log_progress()` OUTSIDE the `with lock:` block — they re-acquire the non-reentrant Lock; nesting them deadlocks the coordinator after the first batch (0 CPU, no vLLM traffic, balance intact — looks exactly like a server hang).
+- Periodic user progress (15-min cadence): prebuilt plot image with matplotlib baked in + a render script that reads the DB and prints a STATUS line, driven by a cron job delivering MEDIA:<png> + the status line to the originating thread (terminal-only toolset).
 
 Live snapshot for the user (on demand): pull the last progress row + per-answer sums, then render the user's two-panel spec — top panel: linear % of RESULTS ONLY, bars for 10..30 ascending, values as % of the valid total; bottom panel: LINEAR (user spec — never log scale), bars of every category as % of total mass (1.0) — valid total, each invalid verdict (OUT_OF_RANGE, MULTIPLE_NUMBERS, LEN_EXCEEDED), invalid total, dropped tail (pruned), todo (frontier). One uniform color per panel, % value labels (small ones rotated), title carries exp count + wall time + timestamp. The dropped-tail/todo bars are usually the biggest; that is the honest picture, don't normalize it away. Absolute numbers on request: express per 1,000,000 (x,xxx,xxx format).
 

@@ -9,7 +9,7 @@ Goal: a clean chart PNG sent as an image, meeting the user's standing style spec
 
 ## Rendering (no pip on host, no matplotlib in the vllm image)
 
-1. Write the plot script to a HOST file first (e.g. `/home/nixos/plot_<topic>.py` via terminal heredoc), then run it in a throwaway container:
+1. One-off charts: write the plot script to a HOST file first (e.g. `/home/nixos/plot_<topic>.py` via terminal heredoc), then run it in a throwaway container:
    ```
    podman run --rm -v /home/nixos:/work:z docker.io/library/python:3.12-slim \
      sh -c "pip install --quiet --no-cache-dir matplotlib; python3 /work/plot_<topic>.py"
@@ -17,6 +17,7 @@ Goal: a clean chart PNG sent as an image, meeting the user's standing style spec
    - The mount root IS `/work`: host `/home/nixos/x` is `/work/x` inside — using host paths inside the container gives FileNotFoundError.
    - Long multi-line Python heredocs passed inline through `podman run sh -c` get mangled in transit (SyntaxError, broken strings) — the host-file-first pattern avoids this.
    - Output PNGs go under `/home/nixos/` so they're readable for the `MEDIA:` path.
+2. Repeated/periodic charts (e.g. a 15-min progress cron): don't pip-install every tick — prebuild a small plot image with matplotlib baked in (`FROM python:3.12-slim; RUN pip install --no-cache-dir matplotlib`) and keep the render script on the host. The cron job runs one `podman run --rm -v <data-volume>:/datav:ro -v /home/nixos/<dir>:/work <plot-image> python3 /work/render.py <db> /work/out.png`; the script prints a one-line STATUS and the job replies `MEDIA:<png>` + that line (terminal-only toolset). DBs on a podman volume are host-readable at `~/.local/share/containers/storage/volumes/<name>/_data/` — the render can read them directly.
 
 2. Dark theme (matplotlib): `fig.patch.set_facecolor('#0e1117')`, grid `#21262d`, text `#c9d1d9`/`#8b949e`, bars `#3fb950`.
 

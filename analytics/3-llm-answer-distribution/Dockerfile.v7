@@ -1,0 +1,5 @@
+FROM docker.io/library/python:3.12-slim
+WORKDIR /app
+COPY worker_v7.py query.py /app/
+VOLUME /data
+ENTRYPOINT ["python3", "-u", "/app/worker_v7.py"]
