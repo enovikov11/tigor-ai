@@ -52,6 +52,10 @@ deploy_staging() {
   cp "$SRC/Dockerfile" "$SRC/staging/Dockerfile"
   mkdir -p "$SRC/staging/web"
   render_page "$SRC/staging/web/index.html" "${STAGING_SUDOKU:-true}" "${STAGING_GAMES:-true}"
+  if [ -d "$SRC/games" ]; then
+    mkdir -p "$SRC/staging/web/games"
+    cp -f "$SRC"/games/*.js "$SRC/staging/web/games/" 2>/dev/null || true
+  fi
   rsync -az --delete \
     --exclude web --exclude proxy.py --exclude Dockerfile --exclude docker-compose.yml \
     "$SRC/staging/" "$VPS:/opt/jev-chess/staging/"   # Caddyfile reference copy
@@ -67,6 +71,10 @@ deploy_prod() {
   : "${I_UNDERSTAND_THIS_TOUCHES_PROD:?deploy.sh: refusing to touch prod. Set I_UNDERSTAND_THIS_TOUCHES_PROD=1 to proceed.}"
   mkdir -p "$SRC/web"
   render_page "$SRC/web/index.html" "${PROD_SUDOKU:-false}" "${PROD_GAMES:-false}"
+  if [ -d "$SRC/games" ]; then
+    mkdir -p "$SRC/web/games"
+    cp -f "$SRC"/games/*.js "$SRC/web/games/" 2>/dev/null || true
+  fi
   rsync -az --delete "$SRC/web/" "$VPS:/opt/jev-chess/web/"
   rsync -az "$SRC/proxy.py" "$SRC/Dockerfile" "$SRC/docker-compose.yml" \
     "$VPS:/opt/jev-chess/"
