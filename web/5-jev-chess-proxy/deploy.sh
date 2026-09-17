@@ -15,16 +15,19 @@ VPS=root@jev-chess.tgr.rs
 SRC=$(cd "$(dirname "$0")" && pwd)
 
 mkdir -p "$SRC/web" "$SRC/staging/web"
-cp "$SRC/index.html" "$SRC/web/index.html"
-cp "$SRC/index.html" "$SRC/staging/web/index.html"
+BEFORE=$(ssh "$VPS" "sha256sum /opt/jev-chess/Caddyfile 2>/dev/null | cut -d' ' -f1 || echo none")
 
 rsync -az --delete --exclude .env --exclude .git --exclude __pycache__ \
   --exclude 'web' --exclude 'staging/web' "$SRC/" "$VPS:/opt/jev-chess/"
+# inject the deploy rev into the served page copies
+REV=$(git -C "$SRC" rev-parse --short HEAD 2>/dev/null || echo unknown)
+if git -C "$SRC" status --porcelain 2>/dev/null | grep -q .; then REV="${REV}-dirty"; fi
+sed "s|<span id=\"rev\">—</span>|<span id=\"rev\">${REV}</span>|" "$SRC/index.html" > "$SRC/web/index.html"
+sed "s|<span id=\"rev\">—</span>|<span id=\"rev\">${REV}</span>|" "$SRC/index.html" > "$SRC/staging/web/index.html"
 rsync -az --delete "$SRC/web/" "$VPS:/opt/jev-chess/web/"
 rsync -az --delete "$SRC/staging/web/" "$VPS:/opt/jev-chess/staging/web/"
 
-# did the Caddyfile change on the VPS? (sha before/after)
-BEFORE=$(ssh "$VPS" "sha256sum /opt/jev-chess/Caddyfile 2>/dev/null | cut -d' ' -f1 || echo none")
+# did the Caddyfile change on the VPS? (BEFORE was read before rsync)
 AFTER=$(ssh "$VPS" "sha256sum /opt/jev-chess/Caddyfile | cut -d' ' -f1")
 
 case "$TARGET" in
