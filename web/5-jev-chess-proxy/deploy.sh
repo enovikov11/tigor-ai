@@ -71,7 +71,9 @@ deploy_prod() {
   : "${I_UNDERSTAND_THIS_TOUCHES_PROD:?deploy.sh: refusing to touch prod. Set I_UNDERSTAND_THIS_TOUCHES_PROD=1 to proceed.}"
   mkdir -p "$SRC/web"
   render_page "$SRC/web/index.html" "${PROD_SUDOKU:-false}" "${PROD_GAMES:-false}"
-  if [ -d "$SRC/games" ]; then
+  # Only copy module files when the games feature is on for this env (rsync
+  # --delete below then purges any previously copied games/ dir).
+  if [ "${PROD_GAMES:-false}" = "true" ] && [ -d "$SRC/games" ]; then
     mkdir -p "$SRC/web/games"
     cp -f "$SRC"/games/*.js "$SRC/web/games/" 2>/dev/null || true
   fi
