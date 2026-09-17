@@ -49,6 +49,19 @@ Both bugs are invisible to the argmax preflight and to mass conservation —
 only the **value-based distributional preflight** (p('I') ≈ 0.655, not 0.356)
 and the **sampling cross-check** catch them. See the skill.
 
+## v8 (reasoning ON, WIP)
+
+`worker_v8.py` = v7 + thinking **enabled**: the walk traverses the think block
+(63-ID template, `enable_thinking=True`) before the answer. Digits in
+reasoning are ignored; the close-think token switches to the ANSWER phase
+(v7 absorption). Special-token texts are resolved **from the server** at boot
+via `logprob_token_ids` (no hand-typed special strings; drift guard).
+`Dockerfile.v8`, `cron_charts_v8.py` included.
+
+Status: partial run (170k exp, 108 min, stopped on request) — with thinking
+ON the tree is far wider; 99% coverage needs several more hours. Result so
+far: 17 still dominant (see `markov_v8.db` on the VM, not committed).
+
 ## Key files
 
 - `worker_v7.py` — the podman worker (current). Token-ID prompt, Dial bucket

@@ -1,0 +1,4 @@
+FROM python:3.12-slim
+WORKDIR /app
+COPY worker_v8.py /app/worker.py
+CMD ["python3", "/app/worker.py"]
