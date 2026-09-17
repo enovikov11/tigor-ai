@@ -2,11 +2,19 @@
 """Jev Chess proxy: fronts api.typesafe.ai/v1/systemone for jev-chess.tgr.rs.
 
 - The TypeSafe key comes from env (TYPESAFE_API_KEY); the client sends none.
-- Requests are validated as chess (biased to ALLOWING): a POST whose JSON body
-  has a questions.move choice question with LAN-shaped criteria keys, plus a
-  chess-looking state when a FEN is present. Non-conforming bodies are
-  rejected, but the bar is deliberately low so the app keeps working. This is
-  an anti-abuse filter, not a strict validator.
+- Requests are validated as app game requests: a POST whose JSON body has a
+  model field, a questions.move choice question (1..255 ASCII-token criteria
+  keys with dict values), and a state object naming a known game. Per-game
+  checks:
+    * "standard chess" — FEN placement shape + LAN-shaped criteria keys;
+    * "sudoku" — 81-cell grid of 0-9 with no conflicts among givens, and every
+      criteria key r<c1-9>c<c1-9>d<1-9> must target an empty cell with a
+      non-conflicting digit;
+    * the module games (connect4, othello, uttt, hex, dots, battleship) —
+      must carry a grid/board array.
+  Anything else (arbitrary prompts, chat, unknown games) is rejected with 400.
+  This is an anti-abuse filter, not a strict validator: it keeps the app
+  working while making the endpoint useless as a free LLM API.
 - Per-IP limits: 1 req/s, 1000/hour, 5000/day.
 
 Spoof-proof client IP: the proxy only listens on the Caddy gateway network
@@ -38,45 +46,103 @@ LIMIT_PER_HOUR = int(os.environ.get("LIMIT_PER_HOUR", "1000"))
 LIMIT_PER_DAY = int(os.environ.get("LIMIT_PER_DAY", "5000"))
 MAX_BODY = 1_000_000  # bytes; a full 20-option chess request is ~30 KB
 
-# --- chess-shaped validation (permissive; skews to allowing) ------------------
+# --- app-game validation (anti-abuse; skews to allowing within a game) --------
 LAN = re.compile(r"^[a-h][1-8][a-h][1-8][qrbn]?$")  # e2e4, g1f3, e7e8q
 FEN_PLACEMENT = re.compile(r"^([pnbqkrPNBQKR1-8]{1,8}/){7}[pnbqkrPNBQKR1-8]{1,8}$")
 PIECE_TYPES = {"p", "n", "b", "r", "q", "k"}
+CRIT_KEY = re.compile(r"^[A-Za-z0-9_.-]{1,32}$")
+SD_CELL = re.compile(r"^r([1-9])c([1-9])d([1-9])$")
+# Games the app may play; anything else is rejected (new games added here).
+KNOWN_GAMES = {
+    "standard chess",
+    "sudoku",
+    "connect4", "othello", "uttt", "hex", "dots", "battleship",
+}
 
 
-def looks_like_chess(body: bytes) -> bool:
+def _sd_grid_conflict(grid, idx, d):
+    r, c = divmod(idx, 9)
+    for j in range(9):
+        if j != c and grid[r * 9 + j] == d:   # same row, different column
+            return True
+        if j != r and grid[j * 9 + c] == d:   # same column, different row
+            return True
+    br, bc = (r // 3) * 3, (c // 3) * 3
+    for j in range(9):
+        if (br + j // 3) * 9 + (bc + j % 3) != idx and grid[(br + j // 3) * 9 + (bc + j % 3)] == d:
+            return True
+    return False
+
+
+def _looks_like_sudoku(state, criteria) -> bool:
+    grid = state.get("grid")
+    if not isinstance(grid, list) or len(grid) != 81:
+        return False
+    for i, v in enumerate(grid):
+        if not isinstance(v, int) or not 0 <= v <= 9:
+            return False
+        if v and _sd_grid_conflict(grid, i, v):  # conflicting givens
+            return False
+    for key in criteria:
+        m = SD_CELL.match(key)
+        if not m:
+            return False
+        r, c, d = (int(m.group(1)) - 1, int(m.group(2)) - 1, int(m.group(3)))
+        idx = r * 9 + c
+        if grid[idx] != 0 or _sd_grid_conflict(grid, idx, d):
+            return False
+    return True
+
+
+def looks_like_app_game(body: bytes) -> bool:
     try:
         doc = json.loads(body)
     except (ValueError, UnicodeDecodeError):
         return False
     if not isinstance(doc, dict):
         return False
+    if not isinstance(doc.get("model"), str) or not doc.get("model"):
+        return False
     questions = doc.get("questions")
     move = questions.get("move") if isinstance(questions, dict) else None
     if not isinstance(move, dict):
         return False
+    if move.get("type") not in (None, "choice"):
+        return False
     criteria = move.get("criteria")
-    if not isinstance(criteria, dict) or not criteria:
+    if not isinstance(criteria, dict) or not (1 <= len(criteria) <= 255):
         return False
     for key, val in criteria.items():
-        if not isinstance(key, str) or not LAN.match(key):
+        if not isinstance(key, str) or not CRIT_KEY.match(key) or not isinstance(val, dict):
             return False
-        if isinstance(val, dict):
-            piece = val.get("piece")
-            if piece is not None and piece not in PIECE_TYPES:
-                return False
     state = doc.get("state")
     if isinstance(state, str) and state.lstrip().startswith("{"):
         try:
             state = json.loads(state)
         except ValueError:
             return False
-    if isinstance(state, dict):
-        fen = state.get("fen")
-        if isinstance(fen, str):
-            placement = fen.split(" ", 1)[0]
-            if not FEN_PLACEMENT.match(placement):
+    if not isinstance(state, dict):
+        return False
+    game = state.get("game")
+    if game not in KNOWN_GAMES:
+        return False
+    if game == "sudoku":
+        return _looks_like_sudoku(state, criteria)
+    if game == "standard chess":
+        for key in criteria:
+            if not LAN.match(key):
                 return False
+        fen = state.get("fen")
+        if isinstance(fen, str) and not FEN_PLACEMENT.match(fen.split(" ", 1)[0]):
+            return False
+        for val in criteria.values():
+            piece = val.get("piece")
+            if piece is not None and piece not in PIECE_TYPES:
+                return False
+        return True
+    # module games: require a serializable grid/board array
+    if not isinstance(state.get("grid", state.get("board")), list):
+        return False
     return True
 
 
@@ -182,11 +248,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self._send_json(400, {"error": {"message": "bad or oversized body"}})
             return
         body = self.rfile.read(length)
-        if not looks_like_chess(body):
+        if not looks_like_app_game(body):
             self._send_json(400, {
-                "error": {"message": "request does not look like a chess move "
-                                     "request (need questions.move choice with "
-                                     "LAN criteria and a chess state)"}
+                "error": {"message": "request does not look like a Jev game "
+                                     "request (need model, questions.move choice "
+                                     "with <=255 criteria, and a known game state)"}
             })
             return
 

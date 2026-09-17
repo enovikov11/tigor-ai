@@ -1,47 +1,81 @@
 #!/usr/bin/env bash
-# Usage: ./deploy.sh [prod|staging|all]
+# Usage: ./deploy.sh [staging|prod|all]
 #
-# NON-DISRUPTIVE by design:
-#   - caddy is NEVER `up`/recreated here (that would drop the shared gateway).
-#     It only receives `docker compose pull`-free graceful `reload`, and only
-#     if the Caddyfile actually changed on the VPS.
-#   - the proxy is rebuilt with --no-deps (never touches caddy).
-#   - the page is a bind mount; new file content needs no restart, but the
-#     bind mount keeps the old INODE after rsync-replaces, so caddy reloads
-#     its file handle only when content changed.
+# STRUCTURE (post-incident hardening — a "staging" deploy once leaked the
+# page to prod because it rsync'd the whole tree into /opt/jev-chess/):
+#   staging  -> writes ONLY /opt/jev-chess/staging/{proxy.py,Dockerfile,
+#               docker-compose.yml,web} + the SHARED gateway Caddyfile
+#               (/opt/jev-chess/Caddyfile, which defines both sites).
+#               Never touches /opt/jev-chess/web, the prod proxy code, or the
+#               prod proxy container.
+#   prod     -> REFUSES unless I_UNDERSTAND_THIS_TOUCHES_PROD=1. Writes
+#               /opt/jev-chess/{proxy.py,Dockerfile,docker-compose.yml,web},
+#               the shared Caddyfile, and rebuilds the prod proxy.
+#   all      -> staging, then prod (same guard).
+#
+# Non-disruptive: pages are bind mounts (no caddy restart to change a page);
+# the proxy rebuilds with --no-deps (never touches caddy); caddy gets a
+# graceful `reload` only when the Caddyfile content actually changed.
+#
+# Feature flags: rendered into the page at deploy time.
+#   prod:    sudoku=${PROD_SUDOKU:-false}
+#   staging: sudoku=${STAGING_SUDOKU:-true}
+# Promote a feature to prod: PROD_SUDOKU=true ./deploy.sh prod
 set -euo pipefail
 TARGET=${1:-all}
 VPS=root@jev-chess.tgr.rs
 SRC=$(cd "$(dirname "$0")" && pwd)
 
-mkdir -p "$SRC/web" "$SRC/staging/web"
-BEFORE=$(ssh "$VPS" "sha256sum /opt/jev-chess/Caddyfile 2>/dev/null | cut -d' ' -f1 || echo none")
-
-rsync -az --delete --exclude .env --exclude .git --exclude __pycache__ \
-  --exclude 'web' --exclude 'staging/web' "$SRC/" "$VPS:/opt/jev-chess/"
-# inject the deploy rev into the served page copies
 REV=$(git -C "$SRC" rev-parse --short HEAD 2>/dev/null || echo unknown)
 if git -C "$SRC" status --porcelain 2>/dev/null | grep -q .; then REV="${REV}-dirty"; fi
-sed "s|<span id=\"rev\">—</span>|<span id=\"rev\">${REV}</span>|" "$SRC/index.html" > "$SRC/web/index.html"
-sed "s|<span id=\"rev\">—</span>|<span id=\"rev\">${REV}</span>|" "$SRC/index.html" > "$SRC/staging/web/index.html"
-rsync -az --delete "$SRC/web/" "$VPS:/opt/jev-chess/web/"
-rsync -az --delete "$SRC/staging/web/" "$VPS:/opt/jev-chess/staging/web/"
 
-# did the Caddyfile change on the VPS? (BEFORE was read before rsync)
-AFTER=$(ssh "$VPS" "sha256sum /opt/jev-chess/Caddyfile | cut -d' ' -f1")
+render_page() { # $1=dest  $2=sudoku-flag(true|false)
+  sed -e "s|<span id=\"rev\">—</span>|<span id=\"rev\">${REV}</span>|" \
+      -e "s/__FEATURE_SUDOKU__/${2}/" "$SRC/index.html" > "$1"
+}
+
+BEFORE=$(ssh "$VPS" "sha256sum /opt/jev-chess/Caddyfile 2>/dev/null | cut -d' ' -f1 || echo none")
+
+deploy_staging() {
+  # self-contained staging build context: staging/proxy.py + staging/Dockerfile
+  # are copies of the canonical files (generated here, not committed).
+  cp "$SRC/proxy.py" "$SRC/staging/proxy.py"
+  cp "$SRC/Dockerfile" "$SRC/staging/Dockerfile"
+  mkdir -p "$SRC/staging/web"
+  render_page "$SRC/staging/web/index.html" "${STAGING_SUDOKU:-true}"
+  rsync -az --delete \
+    --exclude web --exclude proxy.py --exclude Dockerfile --exclude docker-compose.yml \
+    "$SRC/staging/" "$VPS:/opt/jev-chess/staging/"   # Caddyfile reference copy
+  rsync -az "$SRC/staging/proxy.py" "$SRC/staging/Dockerfile" "$SRC/staging/docker-compose.yml" \
+    "$VPS:/opt/jev-chess/staging/"
+  rsync -az --delete "$SRC/staging/web/" "$VPS:/opt/jev-chess/staging/web/"
+  # shared gateway (single caddy for both sites)
+  rsync -az "$SRC/Caddyfile" "$VPS:/opt/jev-chess/Caddyfile"
+  ssh "$VPS" "cd /opt/jev-chess/staging && docker compose up -d --no-deps --build proxy"
+}
+
+deploy_prod() {
+  : "${I_UNDERSTAND_THIS_TOUCHES_PROD:?deploy.sh: refusing to touch prod. Set I_UNDERSTAND_THIS_TOUCHES_PROD=1 to proceed.}"
+  mkdir -p "$SRC/web"
+  render_page "$SRC/web/index.html" "${PROD_SUDOKU:-false}"
+  rsync -az --delete "$SRC/web/" "$VPS:/opt/jev-chess/web/"
+  rsync -az "$SRC/proxy.py" "$SRC/Dockerfile" "$SRC/docker-compose.yml" \
+    "$VPS:/opt/jev-chess/"
+  rsync -az "$SRC/Caddyfile" "$VPS:/opt/jev-chess/Caddyfile"
+  ssh "$VPS" "cd /opt/jev-chess && docker compose up -d --no-deps --build proxy"
+}
 
 case "$TARGET" in
-  prod)    REMOTE='cd /opt/jev-chess && docker compose up -d --no-deps --build proxy' ;;
-  staging) REMOTE='cd /opt/jev-chess/staging && docker compose up -d --no-deps --build proxy' ;;
-  all)     REMOTE='cd /opt/jev-chess && docker compose up -d --no-deps --build proxy && cd /opt/jev-chess/staging && docker compose up -d --no-deps --build proxy' ;;
-  *) echo "unknown target: $TARGET" >&2; exit 2 ;;
+  staging) deploy_staging ;;
+  prod)    deploy_prod ;;
+  all)     deploy_staging; deploy_prod ;;
+  *) echo "unknown target: $TARGET (use staging|prod|all)" >&2; exit 2 ;;
 esac
-ssh "$VPS" "set -e; $REMOTE"
 
-# graceful caddy reload ONLY if the Caddyfile changed (reload keeps existing
-# listeners open; it does not stop the container, so prod stays up)
+# graceful caddy reload ONLY if the shared Caddyfile changed
+AFTER=$(ssh "$VPS" "sha256sum /opt/jev-chess/Caddyfile | cut -d' ' -f1")
 if [ "$BEFORE" != "$AFTER" ]; then
-  echo "Caddyfile changed -> graceful reload"
+  echo "Caddyfile changed -> graceful reload (listeners stay up)"
   ssh "$VPS" 'cd /opt/jev-chess && docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile'
 fi
 echo "deployed: $TARGET"

@@ -1,2 +1,7 @@
 .env
 __pycache__/
+# Generated at deploy time (deploy.sh renders rev + feature flags into these):
+web/
+staging/web/
+staging/proxy.py
+staging/Dockerfile

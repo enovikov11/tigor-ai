@@ -426,6 +426,10 @@
     const REL_ENDPOINT = "/v1/systemone";
     const DIRECT_ENDPOINT = "https://api.typesafe.ai/v1/systemone";
     const DEFAULT_MODEL = "jev-latest";
+    // Per-environment feature flag. deploy.sh injects the value into the
+    // served page: sudoku is ON for staging, OFF for prod, until it is
+    // explicitly promoted. Do not hand-edit; the placeholder is replaced at deploy.
+    const FEATURES = { sudoku: __FEATURE_SUDOKU__ };
     const MAX_OPTIONS = 255;
     const REQUEST_TIMEOUT_MS = 12000;
     const RETRY_DELAY_MS = 2000;
@@ -1039,24 +1043,20 @@
       return b;
     }
     function sdNewPuzzle() {
-      for (let attempt = 0; attempt < 20; attempt++) {
-        const solved = sdGenSolved();
-        const board = solved.slice();
-        const order = sdShuffle([...Array(81).keys()], Math.random);
-        let legal = 0;
-        for (const idx of order) {
-          board[idx] = 0;
-          legal = sdLegal(board).length;
-          if (legal <= MAX_OPTIONS) break;
-        }
-        if (legal > 0 && legal <= MAX_OPTIONS) return board;
-      }
-      // pathological fallback: nearly-full board (few legal placements)
+      // Remove cells from a solved grid (random order) until legal placements
+      // would exceed MAX_OPTIONS, then restore the last removed cell. The
+      // result is the sparsest board with <= MAX_OPTIONS legal placements —
+      // a real game with many options, never a 80-give trivia board.
       const solved = sdGenSolved();
       const board = solved.slice();
       const order = sdShuffle([...Array(81).keys()], Math.random);
-      for (let k = 0; k < 3; k++) board[order[k]] = 0;
-      return board;
+      for (const idx of order) {
+        board[idx] = 0;
+        if (sdLegal(board).length > MAX_OPTIONS) { board[idx] = solved[idx]; break; }
+      }
+      if (sdLegal(board).length >= 1) return board;
+      const b2 = solved.slice(); b2[order[0]] = 0; // fallback: one cell open
+      return b2;
     }
     function sdApply(m, side) {
       const sd = state.sd;
@@ -1257,6 +1257,11 @@
       abortActiveRequest();
       state.abortedForNewGame = false;
       state.gameId = gameSelect.value;
+      if (state.gameId === "sudoku" && !FEATURES.sudoku) {
+        // Feature not enabled on this deployment: fall back to chess.
+        state.gameId = "chess";
+        gameSelect.value = "chess";
+      }
       chessViewEl.style.display = state.gameId === "chess" ? "" : "none";
       sudokuViewEl.style.display = state.gameId === "sudoku" ? "" : "none";
       if (state.gameId === "sudoku") {
@@ -1508,6 +1513,10 @@
     });
 
     function init() {
+      if (!FEATURES.sudoku) {
+        const opt = document.querySelector('#gameSelect option[value="sudoku"]');
+        if (opt) opt.remove(); // feature not enabled on this deployment
+      }
       boardEl.setAttribute("orientation", "white");
       updateInteractive();
       // Auto-start: a game begins immediately. With the default Black side,
