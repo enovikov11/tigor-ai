@@ -1,0 +1,52 @@
+# Self-contained stack for jev-chess.tgr.rs:
+#   caddy  — HTTPS + static page, proxies /v1/systemone to the proxy
+#   proxy  — holds the TypeSafe key (env), validates chess, rate-limits per IP
+# The proxy has NO published port: only caddy (same network) can reach it.
+# GATEWAY_SUBNET must match the ipam subnet below (spoof-proof X-Real-IP).
+services:
+  proxy:
+    build: .
+    container_name: jev-chess-proxy
+    restart: unless-stopped
+    env_file: .env
+    networks:
+      jevnet:
+        ipv4_address: 172.30.42.10
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:8443/healthz', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  caddy:
+    image: caddy:2
+    container_name: jev-chess-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      ACME_AGREE: "true"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./:/srv/jev-chess:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      jevnet:
+        ipv4_address: 172.30.42.5
+    depends_on:
+      - proxy
+
+networks:
+  jevnet:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.30.42.0/24
+          gateway: 172.30.42.1
+
+volumes:
+  caddy_data:
+  caddy_config:

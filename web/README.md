@@ -17,3 +17,4 @@ Websites, web apps, and online tools.
 | `2-udp-broadband-test` | UDP broadband test | Active |
 | `3-enovikov11.github.io` | Personal website | WIP |
 | `4-redux-img` | Redux image project | WIP |
+| `5-jev-chess-proxy` | Jev Chess behind a same-origin key proxy (rate-limited, Caddy HTTPS) | Active |
