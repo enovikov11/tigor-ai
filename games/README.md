@@ -25,3 +25,4 @@ Browser games, physics simulations, procedural generation, and visual experiment
 | `4-qr-snake` | QR Snake game | WIP |
 | `4-random-point` | Random point generator | WIP |
 | `4-skyline-simulator` | Skyline simulation | WIP |
+| `5-jev-chess` | Chess vs TypeSafe (Jev) constrained move selector, single-file | Complete |
