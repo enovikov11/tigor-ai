@@ -892,10 +892,13 @@
         let res;
         res = await postJson(controller, key, endpoint, sendBody);
 
-        // 429 -> at most one automatic retry, honoring Retry-After when practical
-        if (res.status === 429) {
+        // Transient upstream errors -> at most one automatic retry (position unchanged).
+        // 429 honors Retry-After; 400/408/5xx are retried only when the body is NOT our
+        // proxy's JSON (i.e. an upstream HTML error page, which replays cleanly).
+        const isTransient = (st, ct) => st === 429 || st === 408 || (st >= 400 && ct && ct.indexOf("application/json") < 0);
+        if (isTransient(res.status, res.headers.get("content-type") || "")) {
           const ra = Number(res.headers.get("retry-after"));
-          const wait = (Number.isFinite(ra) && ra > 0) ? Math.min(ra, 15) * 1000 : RETRY_DELAY_MS;
+          const wait = (res.status === 429 && Number.isFinite(ra) && ra > 0) ? Math.min(ra, 15) * 1000 : RETRY_DELAY_MS;
           await new Promise((r) => setTimeout(r, wait));
           if (serial === state.requestSerial && posSig === fenAtRequest) {
             res = await postJson(controller, key, endpoint, sendBody);
