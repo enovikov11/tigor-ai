@@ -65,6 +65,35 @@
   .pb-b { border-left: 3px solid #2a3142; }
   .footer { margin-top: 26px; text-align: center; font-size: 11.5px; color: var(--faint); }
   .footer #rev { font-family: var(--mono); color: var(--muted); }
+  .sd-square { width: 100%; aspect-ratio: 1 / 1; }
+  .sudoku-grid {
+    display: grid; grid-template-columns: repeat(9, 1fr); width: 100%; height: 100%;
+    gap: 1px; background: var(--border-soft);
+    border: 2px solid var(--border); border-radius: 6px; overflow: hidden;
+  }
+  .sd-cell {
+    background: #0f1420; border: 0; padding: 0;
+    color: var(--muted); font-family: var(--mono); font-weight: 600;
+    font-size: clamp(11px, 2.4vw, 20px); cursor: default;
+  }
+  .sd-cell.hint { color: var(--faint); font-weight: 400; }
+  .sd-cell.empty { color: var(--muted); cursor: pointer; }
+  .sd-cell.empty:hover { background: var(--panel-2); }
+  .sd-cell.last { background: rgba(240, 179, 74, 0.28); }
+  .sd-cell.sel { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .sd-cell.bx-r { box-shadow: inset -2px 0 0 var(--border); }
+  .sd-cell.bx-b { box-shadow: inset 0 -2px 0 var(--border); }
+  .sd-pad { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; align-items: center; }
+  .sd-pad-title { font-size: 12px; color: var(--muted); width: 100%; }
+  .sd-pad button {
+    width: 38px; height: 42px; background: #0f1420; color: var(--text);
+    border: 1px solid var(--border); border-radius: 8px; cursor: pointer;
+    font-family: var(--mono); font-size: 16px; font-weight: 700;
+    transition: border-color 0.12s ease, background 0.12s ease;
+  }
+  .sd-pad button:hover:not(:disabled) { border-color: var(--accent); background: var(--panel-2); }
+  .sd-pad button:disabled { opacity: 0.25; cursor: not-allowed; }
+  .sd-pad button.cancel { color: var(--bad); }
   .seg button { min-width: 0; padding: 6px 8px; }
   .top-controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .tc-label { font-size: 12px; color: var(--muted); margin: 0; white-space: nowrap; }
@@ -265,6 +294,7 @@
         <label class="tc-label" for="gameSelect">Game</label>
         <select id="gameSelect" class="game-select" aria-label="Game">
           <option value="chess" selected>Chess</option>
+          <option value="sudoku">Sudoku</option>
         </select>
         <label class="tc-label" for="sideSelect">Play as</label>
         <div class="seg" id="sideSelect" role="tablist">
@@ -284,8 +314,16 @@
           <span class="pb pb-w"><b>White</b> <i id="pbWhiteWho">—</i></span>
           <span class="pb pb-b"><b>Black</b> <i id="pbBlackWho">—</i></span>
         </div>
-        <div class="board-wrap">
-          <g-chess-board id="board" coordinates="inside"></g-chess-board>
+        <div id="chessView">
+          <div class="board-wrap">
+            <g-chess-board id="board" coordinates="inside"></g-chess-board>
+          </div>
+        </div>
+        <div id="sudokuView" style="display:none">
+          <div class="sd-square">
+            <div id="sudokuBoard" class="sudoku-grid"></div>
+          </div>
+          <div id="sdPad" class="sd-pad" style="display:none"></div>
         </div>
         <div class="board-status">
           <span class="status-dot" id="statusDot"></span>
@@ -393,6 +431,21 @@
     const RETRY_DELAY_MS = 2000;
     const PROMO_ORDER = ["q", "r", "b", "n"];
     const PROMO_GLYPH = { q: "\u265B", r: "\u265C", b: "\u265D", n: "\u265E" };
+    const SD_INSTRUCTIONS =
+      "You are placing one digit in a 9x9 Sudoku puzzle. Every option in the criteria map is a legal " +
+
+      "placement, encoded as r<row>c<col>d<digit> with rows and columns numbered 1-9 (row 1 = top, col 1 = left). " +
+
+      "The state contains the current grid. Select exactly one placement. Prioritize, in order: " +
+
+      "(1) a placement that leaves your opponent with NO legal placement on their next turn (immediate win), " +
+
+      "(2) avoiding placements that let the opponent win on their turn, (3) preserving your own future options " +
+
+      "by not over-constraining the remaining empty cells, (4) overall progress toward a completed grid. " +
+
+      "Return only the chosen option key as your choice."
+
     const PROMO_NAME = { q: "Queen", r: "Rook", b: "Bishop", n: "Knight" };
     const START_PLACEMENT = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR";
     const AI_INSTRUCTIONS =
@@ -423,6 +476,10 @@
     const pgnBtn = $("pgnBtn");
     const fenBtn = $("fenBtn");
     const pbWhiteWho = $("pbWhiteWho");
+    const chessViewEl = $("chessView");
+    const sudokuViewEl = $("sudokuView");
+    const sudokuGrid = $("sudokuBoard");
+    const padEl = $("sdPad");
     const pbBlackWho = $("pbBlackWho");
     const historyEl = $("history");
     const prevBtn = $("prevPly");
@@ -456,6 +513,11 @@
       activeAbortController: null,
       lastAiDecision: null,
       pendingRetry: false,
+      gameId: "chess",
+      sd: null,          // {board[81], initialBoard[81], hints:Set, turn, hist:[{r,c,d,side,san}]}
+      sdOver: null,      // {text} when the sudoku is over
+      sdViewBoard: null, // board shown while reviewing history
+      sdSelected: null,  // selected empty cell index
       mode: "human",
       flipped: false,
       hintMode: false,
@@ -466,8 +528,9 @@
       abortedForNewGame: false
     };
 
-    const aiTurn = () => state.game.turn();
-    const pliesMade = () => state.game.history().length;
+    const aiTurn = () => state.gameId === "sudoku" ? state.sd.turn : state.game.turn();
+    const pliesMade = () => state.gameId === "sudoku" ? state.sd.hist.length : state.game.history().length;
+    const gameIsOver = () => state.gameId === "sudoku" ? !!state.sdOver : state.game.isGameOver();
     const livePly = () => pliesMade();
     const isLiveView = () => state.viewPly === livePly();
 
@@ -484,6 +547,7 @@
     }
 
     function syncBoard(fen) {
+      if (state.gameId === "sudoku") { renderSudoku(); return; }
       let orient = state.humanColor === "w" ? "white" : state.humanColor === "b" ? "black" : "white";
       if (state.flipped) orient = orient === "white" ? "black" : "white";
       boardEl.setAttribute("orientation", orient);
@@ -506,6 +570,7 @@
     }
 
     function updateInteractive() {
+      if (state.gameId === "sudoku") { renderSudoku(); return; }
       if (interactionAllowed()) boardEl.setAttribute("interactive", "");
       else boardEl.removeAttribute("interactive");
       if (state.humanColor) boardEl.turn = state.humanColor;
@@ -518,7 +583,8 @@
       else if (state.humanColor === "w") canUndo = pl >= 1;
       else canUndo = pl >= 2; // as Black, undo only makes sense once we've moved
       undoBtn.disabled = !canUndo || state.isThinking;
-      const canHint = !state.game.isGameOver() && !state.isThinking && !state.pendingRetry && state.mode === "human" && aiTurn() === state.humanColor;
+      flipBtn.disabled = state.gameId === "sudoku" || state.isThinking;
+      const canHint = !gameIsOver() && !state.isThinking && !state.pendingRetry && state.mode === "human" && aiTurn() === state.humanColor;
       hintBtn.disabled = !canHint;
     }
 
@@ -533,8 +599,9 @@
     }
 
     function refreshLiveStatus() {
-      const g = state.game;
       updateUndoHintBtns();
+      if (state.gameId === "sudoku") { sdRefreshStatus(); return; }
+      const g = state.game;
       if (g.isGameOver()) { setStatus(resultText(g), "bad"); return; }
       if (state.pendingRetry) { setStatus("AI move failed \u2014 see the AI decision panel and Retry.", "warn"); return; }
       if (state.mode === "jevjev") {
@@ -565,6 +632,7 @@
     }
 
     function renderHistory() {
+      if (state.gameId === "sudoku") { sdRenderHistory(); return; }
       const hist = state.game.history({ verbose: true });
       historyEl.textContent = "";
       if (hist.length === 0) {
@@ -611,6 +679,21 @@
       if (ply < 0) ply = 0;
       if (ply > livePly()) ply = livePly();
       state.viewPly = ply;
+      if (state.gameId === "sudoku") {
+        const sd = state.sd;
+        if (isLiveView()) state.sdViewBoard = null;
+        else {
+          const board = sd.initialBoard.slice();
+          for (let i = 0; i < ply; i++) { const h = sd.hist[i]; board[h.r * 9 + h.c] = h.d; }
+          state.sdViewBoard = board;
+        }
+        hidePad();
+        renderSudoku();
+        renderHistory();
+        if (isLiveView()) refreshLiveStatus();
+        else setStatus("Reviewing move " + ply + " of " + livePly(), "dim");
+        return;
+      }
       const hist = state.game.history({ verbose: true });
       const targetFen = ply === 0 ? START_PLACEMENT : hist[ply - 1].after;
       syncBoard(targetFen);
@@ -729,7 +812,8 @@
       const key = apiKeyEl.value.trim();
       const model = modelEl.value.trim() || DEFAULT_MODEL;
       const endpoint = state.connMode === "byok" ? DIRECT_ENDPOINT : REL_ENDPOINT;
-      const fenAtRequest = g.fen();
+      const isSd = state.gameId === "sudoku";
+      const fenAtRequest = isSd ? JSON.stringify(state.sd.board) : g.fen();
       const serial = ++state.requestSerial;
 
       state.isThinking = true;
@@ -740,7 +824,7 @@
 
       let payload;
       try {
-        payload = buildPayload(g);
+        payload = isSd ? buildSdPayload() : buildPayload(g);
       } catch (err) {
         // e.g. invariant (too many legal moves) — surface, no position change.
         state.isThinking = false;
@@ -751,7 +835,7 @@
         return;
       }
       const sendBody = { model, state: payload.state, questions: payload.questions };
-      const legalMap = new Map(payload._meta.moves.map((m) => [m.lan, m]));
+      const legalMap = new Map(payload._meta.moves.map((m) => [m.lan || m.key, m]));
       const optionCount = payload._meta.count;
 
       const controller = new AbortController();
@@ -767,7 +851,7 @@
           const ra = Number(res.headers.get("retry-after"));
           const wait = (Number.isFinite(ra) && ra > 0) ? Math.min(ra, 15) * 1000 : RETRY_DELAY_MS;
           await new Promise((r) => setTimeout(r, wait));
-          if (serial === state.requestSerial && state.game.fen() === fenAtRequest) {
+          if (serial === state.requestSerial && (isSd ? JSON.stringify(state.sd.board) : state.game.fen()) === fenAtRequest) {
             res = await postJson(controller, key, endpoint, sendBody);
           }
         }
@@ -791,7 +875,7 @@
         }
 
         // Stale response: a reset / new game / position change owns the game now.
-        if (serial !== state.requestSerial || state.game.fen() !== fenAtRequest) {
+        if (serial !== state.requestSerial || (isSd ? JSON.stringify(state.sd.board) : state.game.fen()) !== fenAtRequest) {
           return;
         }
 
@@ -822,7 +906,11 @@
         const moverColor = state.mode === "jevjev" ? aiTurn() : state.aiColor;
         const byLabel = (moverColor === "w" ? "White" : "Black") + " (Jev)";
         const move = legalMap.get(choice);
-        state.game.move({ from: move.from, to: move.to, promotion: move.promotion });
+        if (isSd) {
+          sdApply({ r: move.r, c: move.c, d: move.d, san: move.san }, moverColor);
+        } else {
+          state.game.move({ from: move.from, to: move.to, promotion: move.promotion });
+        }
         state.lastRespAt = Date.now();
 
         const probs = ans.probabilities || {};
@@ -842,7 +930,7 @@
 
         state.isThinking = false; // before status/interaction recomputes
         state.viewPly = livePly();
-        syncBoard(state.game.fen());
+        syncBoard(isSd ? "" : state.game.fen());
         renderHistory();
         refreshLiveStatus();
         if (state.mode === "jevjev") scheduleJevChain();
@@ -884,7 +972,7 @@
     }
 
     function maybeAiMove() {
-      if (state.game.isGameOver()) return;
+      if (gameIsOver()) return;
       if (state.mode === "human" && aiTurn() !== state.aiColor) return;
       if (state.isThinking || state.activeAbortController) return;
       const keyNeeded = state.connMode === "byok"; // direct API use needs a client key
@@ -901,14 +989,253 @@
 
     function scheduleJevChain() {
       if (state.mode !== "jevjev") return;
-      if (state.game.isGameOver()) { refreshLiveStatus(); return; }
+      if (gameIsOver()) { refreshLiveStatus(); return; }
       // Stay under the proxy's 1 req/s per-IP limit between chained moves.
       const wait = Math.max(0, 1150 - (Date.now() - state.lastRespAt));
       setTimeout(() => {
         if (state.mode !== "jevjev") return;
-        if (state.game.isGameOver() || state.isThinking || state.activeAbortController || state.pendingRetry) return;
+        if (gameIsOver() || state.isThinking || state.activeAbortController || state.pendingRetry) return;
         void requestAiMove();
       }, wait);
+    }
+
+
+    // ============================ SUDOKU ============================
+    // Placement duel: each turn a player places one digit in an empty cell
+    // (digit must not conflict with row/col/box). Grid full -> draw. A player
+    // who has no legal placement on their turn loses. All legal placements are
+    // sent to TypeSafe as one choice question (keys r<row>c<col>d<digit>).
+    function sdKey(r, c, d) { return "r" + (r + 1) + "c" + (c + 1) + "d" + d; }
+    function sdSan(r, c, d) { return "r" + (r + 1) + "c" + (c + 1) + "=" + d; }
+    function sdConflicts(board, idx, d) {
+      const r = (idx / 9) | 0, c = idx % 9;
+      for (let i = 0; i < 9; i++) {
+        if (board[r * 9 + i] === d) return true;
+        if (board[i * 9 + c] === d) return true;
+      }
+      const br = ((r / 3) | 0) * 3, bc = ((c / 3) | 0) * 3;
+      for (let i = 0; i < 9; i++) if (board[(br + ((i / 3) | 0)) * 9 + (bc + (i % 3))] === d) return true;
+      return false;
+    }
+    function sdLegal(board) {
+      const out = [];
+      for (let idx = 0; idx < 81; idx++) {
+        if (board[idx]) continue;
+        const r = (idx / 9) | 0, c = idx % 9;
+        for (let d = 1; d <= 9; d++) if (!sdConflicts(board, idx, d)) out.push({ r, c, d, key: sdKey(r, c, d), san: sdSan(r, c, d) });
+      }
+      return out;
+    }
+    function sdShuffle(a, rnd) { for (let i = a.length - 1; i > 0; i--) { const j = (rnd() * (i + 1)) | 0; const t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
+    function sdGenSolved() {
+      const b = new Array(81).fill(0);
+      (function fill(pos) {
+        if (pos === 81) return true;
+        for (const d of sdShuffle([1, 2, 3, 4, 5, 6, 7, 8, 9], Math.random)) {
+          if (!sdConflicts(b, pos, d)) { b[pos] = d; if (fill(pos + 1)) return true; b[pos] = 0; }
+        }
+        return false;
+      })(0);
+      return b;
+    }
+    function sdNewPuzzle() {
+      for (let attempt = 0; attempt < 20; attempt++) {
+        const solved = sdGenSolved();
+        const board = solved.slice();
+        const order = sdShuffle([...Array(81).keys()], Math.random);
+        let legal = 0;
+        for (const idx of order) {
+          board[idx] = 0;
+          legal = sdLegal(board).length;
+          if (legal <= MAX_OPTIONS) break;
+        }
+        if (legal > 0 && legal <= MAX_OPTIONS) return board;
+      }
+      // pathological fallback: nearly-full board (few legal placements)
+      const solved = sdGenSolved();
+      const board = solved.slice();
+      const order = sdShuffle([...Array(81).keys()], Math.random);
+      for (let k = 0; k < 3; k++) board[order[k]] = 0;
+      return board;
+    }
+    function sdApply(m, side) {
+      const sd = state.sd;
+      sd.board[m.r * 9 + m.c] = m.d;
+      sd.hist.push({ r: m.r, c: m.c, d: m.d, side, san: m.san });
+      sd.turn = sd.turn === "w" ? "b" : "w";
+      if (state.sdOver) return;
+      if (sd.board.every((v) => v !== 0)) { state.sdOver = "Draw \u2014 grid complete"; return; }
+      if (sdLegal(sd.board).length === 0) state.sdOver = (side === "w" ? "White" : "Black") + " wins \u2014 opponent has no legal placement";
+    }
+    function sdInteractive() {
+      return (
+        state.gameId === "sudoku" && isLiveView() && !state.sdOver && !state.isThinking &&
+        !state.pendingRetry && state.mode === "human" && aiTurn() === state.humanColor
+      );
+    }
+    function sdHumanPlace(r, c, d) {
+      if (!sdInteractive()) return;
+      const sd = state.sd;
+      const ok = sdLegal(sd.board).some((m) => m.r === r && m.c === c && m.d === d);
+      state.sdSelected = null;
+      if (!ok) { renderSudoku(); return; }
+      sdApply({ r, c, d, san: sdSan(r, c, d) }, aiTurn());
+      state.viewPly = livePly();
+      hidePad();
+      renderSudoku();
+      renderHistory();
+      updateInteractive();
+      refreshLiveStatus();
+      if (gameIsOver()) { refreshLiveStatus(); return; }
+      if (aiTurn() === state.aiColor) maybeAiMove();
+    }
+    function renderSudoku() {
+      const sd = state.sd;
+      if (!sd) return;
+      const board = state.sdViewBoard || sd.board;
+      const lastIdx = state.viewPly > 0 ? (() => { const h = sd.hist[state.viewPly - 1]; return h.r * 9 + h.c; })() : -1;
+      const interactive = sdInteractive();
+      sudokuGrid.textContent = "";
+      for (let idx = 0; idx < 81; idx++) {
+        const r = (idx / 9) | 0, c = idx % 9;
+        const v = board[idx];
+        const cell = document.createElement("div");
+        cell.className = "sd-cell";
+        cell.dataset.idx = idx;
+        if (c === 2 || c === 5) cell.classList.add("bx-r");
+        if (r === 2 || r === 5) cell.classList.add("bx-b");
+        if (sd.initialBoard[idx] !== 0) cell.classList.add("hint");
+        if (idx === lastIdx) cell.classList.add("last");
+        if (v === 0) {
+          cell.textContent = "\u00B7";
+          if (interactive) {
+            cell.classList.add("empty");
+            cell.addEventListener("click", () => {
+              if (!sdInteractive() || state.sd.board[idx] !== 0) return;
+              state.sdSelected = state.sdSelected === idx ? null : idx;
+              renderSudoku();
+            });
+          }
+        } else {
+          cell.textContent = v;
+        }
+        if (state.sdSelected === idx) cell.classList.add("sel");
+        sudokuGrid.appendChild(cell);
+      }
+      renderPad();
+    }
+    function renderPad() {
+      padEl.textContent = "";
+      if (!state.sdSelected || !sdInteractive()) { padEl.style.display = "none"; return; }
+      const idx = state.sdSelected, r = (idx / 9) | 0, c = idx % 9;
+      const legal = new Set(sdLegal(state.sd.board).filter((m) => m.r === r && m.c === c).map((m) => m.d));
+      padEl.style.display = "";
+      const t = document.createElement("div");
+      t.className = "sd-pad-title";
+      t.textContent = "Place in r" + (r + 1) + "c" + (c + 1) + " \u2014 pick a digit:";
+      padEl.appendChild(t);
+      for (let d = 1; d <= 9; d++) {
+        const b = document.createElement("button");
+        b.textContent = d;
+        b.disabled = !legal.has(d);
+        b.addEventListener("click", () => sdHumanPlace(r, c, d));
+        padEl.appendChild(b);
+      }
+      const x = document.createElement("button");
+      x.className = "cancel"; x.textContent = "\u2715";
+      x.addEventListener("click", () => { state.sdSelected = null; renderSudoku(); });
+      padEl.appendChild(x);
+    }
+    function hidePad() { padEl.style.display = "none"; }
+    function sdRefreshStatus() {
+      if (state.sdOver) { setStatus(state.sdOver, "bad"); return; }
+      if (state.pendingRetry) { setStatus("AI move failed \u2014 see the AI decision panel and Retry.", "warn"); return; }
+      if (state.isThinking) { setStatus("Jev is placing a digit\u2026", "thinking"); return; }
+      if (aiTurn() === state.humanColor) setStatus("Your turn \u2014 " + (state.humanColor === "w" ? "White" : "Black") + " \u2014 tap an empty cell, then a digit.", "good");
+      else setStatus("Waiting for Jev", "dim");
+    }
+    function sdRenderHistory() {
+      const hist = state.sd.hist;
+      historyEl.textContent = "";
+      if (hist.length === 0) {
+        const e = document.createElement("div"); e.className = "hist-empty"; e.textContent = "No moves yet.";
+        historyEl.appendChild(e);
+      } else {
+        for (let i = 0; i < hist.length; i += 2) {
+          const row = document.createElement("div"); row.className = "hist-row";
+          const num = document.createElement("span"); num.className = "hist-num"; num.textContent = (i / 2 + 1) + ".";
+          row.appendChild(num);
+          const mk = (mv, ply) => {
+            const b = document.createElement("button");
+            b.className = "ply" + (state.viewPly === ply ? " active" : "");
+            b.textContent = mv.san;
+            b.title = "View the position after " + mv.san;
+            b.addEventListener("click", () => viewPly(ply));
+            return b;
+          };
+          row.appendChild(mk(hist[i], i + 1));
+          row.appendChild(hist[i + 1] ? mk(hist[i + 1], i + 2) : document.createElement("span"));
+          historyEl.appendChild(row);
+        }
+      }
+      prevBtn.disabled = state.viewPly <= 0;
+      nextBtn.disabled = state.viewPly >= livePly();
+      liveBtn.disabled = isLiveView();
+      const active = historyEl.querySelector(".ply.active");
+      if (active) {
+        const aTop = active.offsetTop, aBot = aTop + active.offsetHeight;
+        if (aTop < historyEl.scrollTop) historyEl.scrollTop = aTop;
+        else if (aBot > historyEl.scrollTop + historyEl.clientHeight) historyEl.scrollTop = aBot - historyEl.clientHeight;
+      }
+    }
+    function sdUndo() {
+      const sd = state.sd;
+      if (state.isThinking || state.activeAbortController) abortActiveRequest();
+      if (sd.hist.length === 0) return;
+      const back = state.mode === "jevjev" ? (sd.hist.length >= 2 ? 2 : 1) : (aiTurn() === state.humanColor ? 2 : 1);
+      for (let i = 0; i < back && sd.hist.length > 0; i++) {
+        const h = sd.hist.pop();
+        sd.board[h.r * 9 + h.c] = 0;
+      }
+      sd.turn = sd.hist.length ? (sd.hist[sd.hist.length - 1].side === "w" ? "b" : "w") : "w";
+      state.sdOver = null;
+      state.viewPly = 0; state.sdViewBoard = null; state.sdSelected = null;
+      state.pendingRetry = false;
+      retryRow.style.display = "none";
+      retryBtn.textContent = "Retry AI Move";
+      state.lastAiDecision = null;
+      clearAiDecision();
+      hidePad();
+      renderSudoku();
+      renderHistory();
+      updatePlayersBar();
+      refreshLiveStatus();
+      if (!gameIsOver() && (state.mode === "jevjev" || aiTurn() === state.aiColor)) maybeAiMove();
+    }
+    function sdGridText(oneLine) {
+      const rows = [];
+      for (let r = 0; r < 9; r++) {
+        const line = [];
+        for (let c = 0; c < 9; c++) line.push(state.sd.board[r * 9 + c] || ".");
+        rows.push(line.join(" "));
+      }
+      return oneLine ? rows.join(" | ") : rows.join("\n");
+    }
+    function buildSdPayload() {
+      const sd = state.sd;
+      const legal = sdLegal(sd.board);
+      if (legal.length > MAX_OPTIONS) {
+        throw { kind: "internal", detail: "More than " + MAX_OPTIONS + " legal placements (" + legal.length + "); refusing to truncate." };
+      }
+      const criteria = {};
+      for (const m of legal) criteria[m.key] = { row: m.r + 1, col: m.c + 1, digit: m.d, box: ((m.r / 3) | 0) * 3 + ((m.c / 3) | 0) };
+      const empties = sd.board.filter((v) => !v).length;
+      return {
+        model: modelEl.value.trim() || DEFAULT_MODEL,
+        state: { game: "sudoku", side_to_move: sd.turn, grid: sd.board.slice(), empty_cells: empties, move_number: sd.hist.length + 1 },
+        questions: { move: { type: "choice", instructions: SD_INSTRUCTIONS, criteria } },
+        _meta: { moves: legal, count: legal.length }
+      };
     }
 
     function abortActiveRequest() {
@@ -929,6 +1256,16 @@
     function startNewGame() {
       abortActiveRequest();
       state.abortedForNewGame = false;
+      state.gameId = gameSelect.value;
+      chessViewEl.style.display = state.gameId === "chess" ? "" : "none";
+      sudokuViewEl.style.display = state.gameId === "sudoku" ? "" : "none";
+      if (state.gameId === "sudoku") {
+        const pz = sdNewPuzzle();
+        state.sd = { board: pz, initialBoard: pz.slice(), turn: "w", hist: [] };
+        state.sdOver = null;
+        state.sdViewBoard = null;
+        state.sdSelected = null;
+      }
       state.game = new Chess();
       state.mode = state.chosenSide === "jevjev" ? "jevjev" : "human";
       state.humanColor = state.mode === "jevjev" ? null : resolveSide();
@@ -1074,12 +1411,14 @@
     newGameBtn.addEventListener("click", startNewGame);
 
     flipBtn.addEventListener("click", () => {
+      if (state.gameId === "sudoku") return;
       state.flipped = !state.flipped;
       const hist = state.game.history({ verbose: true });
       syncBoard(state.viewPly === 0 ? START_PLACEMENT : hist[state.viewPly - 1].after);
     });
 
     undoBtn.addEventListener("click", () => {
+      if (state.gameId === "sudoku") { sdUndo(); return; }
       if (state.pendingPromotion) hidePromo();
       if (state.isThinking || state.activeAbortController) abortActiveRequest();
       const g = state.game;
@@ -1106,7 +1445,7 @@
     });
 
     hintBtn.addEventListener("click", () => {
-      if (state.game.isGameOver() || state.isThinking || state.activeAbortController) return;
+      if (gameIsOver() || state.isThinking || state.activeAbortController) return;
       if (state.mode !== "human" || aiTurn() !== state.humanColor) return;
       state.viewPly = livePly();
       state.hintMode = true;
@@ -1126,16 +1465,13 @@
       setStatus((ok ? "" : "Clipboard blocked \u2014 ") + label + (ok ? " copied." : ""), ok ? "good" : "warn");
       setTimeout(refreshLiveStatus, 1600);
     }
-    pgnBtn.addEventListener("click", () => copyText("PGN", state.game.pgn() || "(no moves)"));
-    fenBtn.addEventListener("click", () => copyText("FEN", state.game.fen()));
+    pgnBtn.addEventListener("click", () => copyText("Grid", state.gameId === "sudoku" ? sdGridText(false) : (state.game.pgn() || "(no moves)")));
+    fenBtn.addEventListener("click", () => copyText(state.gameId === "sudoku" ? "Grid" : "FEN", state.gameId === "sudoku" ? sdGridText(true) : state.game.fen()));
     restartBtn.addEventListener("click", startNewGame);
-    gameSelect.addEventListener("change", () => {
-      // Only chess exists today; picking a (different) game restarts into it.
-      startNewGame();
-    });
+    gameSelect.addEventListener("change", () => { startNewGame(); });
 
     retryBtn.addEventListener("click", () => {
-      if (state.game.isGameOver()) return;
+      if (gameIsOver()) return;
       if (state.mode === "human" && aiTurn() !== state.aiColor) return;
       if (state.isThinking || state.activeAbortController) return;
       state.pendingRetry = false;
