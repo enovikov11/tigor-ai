@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
 <meta
   http-equiv="Content-Security-Policy"
   content="default-src 'self'; script-src https://cdn.jsdelivr.net 'unsafe-inline'; style-src https://cdn.jsdelivr.net 'unsafe-inline'; img-src data:; font-src data: 'self'; connect-src 'self' https://api.typesafe.ai; object-src 'none'; base-uri 'self'; form-action 'self';"
@@ -31,6 +31,7 @@
     --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
   }
   * { box-sizing: border-box; }
+  html, body { touch-action: pan-y; }
   html, body { height: 100%; }
   body {
     margin: 0;
@@ -297,6 +298,15 @@
           <h2>Game</h2>
           <div class="btn-row">
             <button class="btn" id="newGame">New Game</button>
+            <button class="btn secondary" id="undoBtn" title="Undo the last move(s)">Undo</button>
+          </div>
+          <div class="btn-row" style="margin-top:8px;">
+            <button class="btn ghost" id="flipBtn" title="Flip the board">&#8645; Flip</button>
+            <button class="btn ghost" id="hintBtn" title="Ask Jev for a hint (does not play)">Hint</button>
+          </div>
+          <div class="btn-row" style="margin-top:8px;">
+            <button class="btn ghost" id="pgnBtn" title="Copy PGN to clipboard">Copy PGN</button>
+            <button class="btn ghost" id="fenBtn" title="Copy FEN to clipboard">Copy FEN</button>
           </div>
         </div>
 
@@ -407,6 +417,11 @@
     const keyField = $("keyField");
     const keynote = $("keynote");
     const aiBy = $("aiBy");
+    const undoBtn = $("undoBtn");
+    const flipBtn = $("flipBtn");
+    const hintBtn = $("hintBtn");
+    const pgnBtn = $("pgnBtn");
+    const fenBtn = $("fenBtn");
     const pbWhiteWho = $("pbWhiteWho");
     const pbBlackWho = $("pbBlackWho");
     const historyEl = $("history");
@@ -442,6 +457,8 @@
       lastAiDecision: null,
       pendingRetry: false,
       mode: "human",
+      flipped: false,
+      hintMode: false,
       connMode: "proxy",
       lastRespAt: 0,
       chosenSide: "black",
@@ -467,12 +484,12 @@
     }
 
     function syncBoard(fen) {
+      let orient = state.humanColor === "w" ? "white" : state.humanColor === "b" ? "black" : "white";
+      if (state.flipped) orient = orient === "white" ? "black" : "white";
+      boardEl.setAttribute("orientation", orient);
       if (state.humanColor) {
-        boardEl.setAttribute("orientation", state.humanColor === "w" ? "white" : "black");
         // Defense-in-depth: gchessboard only makes the human's pieces grabbable.
         boardEl.turn = state.humanColor;
-      } else {
-        boardEl.setAttribute("orientation", "white");
       }
       boardEl.fen = fen;
     }
@@ -494,6 +511,17 @@
       if (state.humanColor) boardEl.turn = state.humanColor;
     }
 
+    function updateUndoHintBtns() {
+      const pl = pliesMade();
+      let canUndo;
+      if (state.mode === "jevjev") canUndo = pl >= 1;
+      else if (state.humanColor === "w") canUndo = pl >= 1;
+      else canUndo = pl >= 2; // as Black, undo only makes sense once we've moved
+      undoBtn.disabled = !canUndo || state.isThinking;
+      const canHint = !state.game.isGameOver() && !state.isThinking && !state.pendingRetry && state.mode === "human" && aiTurn() === state.humanColor;
+      hintBtn.disabled = !canHint;
+    }
+
     function updatePlayersBar() {
       if (state.mode === "jevjev") {
         pbWhiteWho.textContent = "Jev";
@@ -506,6 +534,7 @@
 
     function refreshLiveStatus() {
       const g = state.game;
+      updateUndoHintBtns();
       if (g.isGameOver()) { setStatus(resultText(g), "bad"); return; }
       if (state.pendingRetry) { setStatus("AI move failed \u2014 see the AI decision panel and Retry.", "warn"); return; }
       if (state.mode === "jevjev") {
@@ -766,7 +795,32 @@
           return;
         }
 
+        if (state.hintMode) {
+          // Hint: show Jev's choice, do NOT change the position.
+          const probs = ans.probabilities || {};
+          const top = Object.entries(probs)
+            .map(([lan, pv]) => ({ lan, san: legalMap.has(lan) ? legalMap.get(lan).san : lan, prob: typeof pv === "number" ? pv : 0 }))
+            .sort((a, b) => b.prob - a.prob)
+            .slice(0, 5);
+          showAiDecision({
+            san: legalMap.get(choice).san, lan: choice, by: "Jev (hint)",
+            model: data.model || model,
+            confidence: typeof ans.confidence === "number" ? ans.confidence : null,
+            input_tokens: data.usage ? data.usage.input_tokens : null,
+            output_tokens: data.usage ? data.usage.output_tokens : null,
+            options: optionCount, top
+          });
+          state.isThinking = false;
+          syncBoard(state.game.fen());
+          updateInteractive();
+          updateUndoHintBtns();
+          setStatus("Hint: " + legalMap.get(choice).san + " \u2014 your move.", "good");
+          return;
+        }
+
         state.requestSerial = ++state.requestSerial; // invalidate before applying
+        const moverColor = state.mode === "jevjev" ? aiTurn() : state.aiColor;
+        const byLabel = (moverColor === "w" ? "White" : "Black") + " (Jev)";
         const move = legalMap.get(choice);
         state.game.move({ from: move.from, to: move.to, promotion: move.promotion });
         state.lastRespAt = Date.now();
@@ -778,7 +832,7 @@
           .slice(0, 5);
         showAiDecision({
           san: move.san, lan: choice,
-          by: aiTurn() === "w" ? "White (Jev)" : "Black (Jev)",
+          by: byLabel,
           model: data.model || model,
           confidence: typeof ans.confidence === "number" ? ans.confidence : null,
           input_tokens: data.usage ? data.usage.input_tokens : null,
@@ -841,6 +895,7 @@
         setStatus("Add your TypeSafe API key to let Jev move.", "warn");
         return;
       }
+      state.hintMode = false;
       void requestAiMove();
     }
 
@@ -886,8 +941,11 @@
       retryRow.style.display = "none";
       retryBtn.textContent = "Retry AI Move";
       hidePromo();
+      state.flipped = false;
+      state.hintMode = false;
       updatePlayersBar();
       syncBoard(state.game.fen());
+      updateUndoHintBtns();
       updateInteractive();
       renderHistory();
       clearAiDecision();
@@ -1014,6 +1072,62 @@
     applyConnMode();
 
     newGameBtn.addEventListener("click", startNewGame);
+
+    flipBtn.addEventListener("click", () => {
+      state.flipped = !state.flipped;
+      const hist = state.game.history({ verbose: true });
+      syncBoard(state.viewPly === 0 ? START_PLACEMENT : hist[state.viewPly - 1].after);
+    });
+
+    undoBtn.addEventListener("click", () => {
+      if (state.pendingPromotion) hidePromo();
+      if (state.isThinking || state.activeAbortController) abortActiveRequest();
+      const g = state.game;
+      if (g.history().length === 0) return;
+      // Undo the last human move: if the AI has already answered (it is now
+      // the human's turn) remove 2 plies; if the human just moved and the AI
+      // hasn't answered yet, remove 1 ply. In Jev-vs-Jev remove a full round
+      // (2 plies) when possible.
+      const back = state.mode === "jevjev"
+        ? (g.history().length >= 2 ? 2 : 1)
+        : (aiTurn() === state.humanColor ? 2 : 1);
+      for (let i = 0; i < back && g.history().length > 0; i++) g.undo();
+      state.viewPly = 0;
+      state.pendingRetry = false;
+      retryRow.style.display = "none";
+      retryBtn.textContent = "Retry AI Move";
+      state.lastAiDecision = null;
+      clearAiDecision();
+      syncBoard(g.fen());
+      renderHistory();
+      updatePlayersBar();
+      refreshLiveStatus();
+      if (!g.isGameOver() && (state.mode === "jevjev" || aiTurn() === state.aiColor)) maybeAiMove();
+    });
+
+    hintBtn.addEventListener("click", () => {
+      if (state.game.isGameOver() || state.isThinking || state.activeAbortController) return;
+      if (state.mode !== "human" || aiTurn() !== state.humanColor) return;
+      state.viewPly = livePly();
+      state.hintMode = true;
+      void requestAiMove();
+    });
+
+    async function copyText(label, text) {
+      let ok = false;
+      try { await navigator.clipboard.writeText(text); ok = true; }
+      catch (_) {
+        const ta = document.createElement("textarea");
+        ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+        document.body.appendChild(ta); ta.select();
+        try { ok = document.execCommand("copy"); } catch (_) { ok = false; }
+        document.body.removeChild(ta);
+      }
+      setStatus((ok ? "" : "Clipboard blocked \u2014 ") + label + (ok ? " copied." : ""), ok ? "good" : "warn");
+      setTimeout(refreshLiveStatus, 1600);
+    }
+    pgnBtn.addEventListener("click", () => copyText("PGN", state.game.pgn() || "(no moves)"));
+    fenBtn.addEventListener("click", () => copyText("FEN", state.game.fen()));
     restartBtn.addEventListener("click", startNewGame);
     gameSelect.addEventListener("change", () => {
       // Only chess exists today; picking a (different) game restarts into it.
@@ -1040,6 +1154,12 @@
     promoOverlay.addEventListener("click", (e) => {
       if (e.target === promoOverlay) { hidePromo(); syncBoard(state.game.fen()); updateInteractive(); }
     });
+
+    // Prevent accidental page pinch/zoom on touch devices (mobile only: the
+    // media query is false on desktop widths, so desktop zoom is untouched).
+    document.addEventListener("gesturestart", (e) => {
+      if (window.matchMedia("(max-width: 900px)").matches) e.preventDefault();
+    }, { passive: false });
 
     document.addEventListener("keydown", (e) => {
       if (promoOverlay.classList.contains("show")) {

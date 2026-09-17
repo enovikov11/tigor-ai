@@ -7,6 +7,12 @@
 jev-chess.tgr.rs {
 	encode gzip
 
+	# Access log (JSON): users, requests, status, latency.
+	log {
+		output stdout
+		format json
+	}
+
 	# /v1/systemone -> prod proxy (key lives there; per-IP rate limited).
 	# header_up X-Real-IP {remote_host} is set by Caddy from the true client
 	# address and OVERWRITES any client-supplied value — the proxy only
@@ -32,6 +38,12 @@ jev-chess.tgr.rs {
 # ---------- STAGING (same VPS, separate proxy, own page copy) ----------
 jev-chess-staging.tgr.rs {
 	encode gzip
+
+	# Access log (JSON): users, requests, status, latency.
+	log {
+		output stdout
+		format json
+	}
 
 	@api path /v1/systemone
 	handle @api {
