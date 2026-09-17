@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
 <meta
   http-equiv="Content-Security-Policy"
-  content="default-src 'self'; script-src https://cdn.jsdelivr.net 'unsafe-inline'; style-src https://cdn.jsdelivr.net 'unsafe-inline'; img-src data:; font-src data: 'self'; connect-src 'self' https://api.typesafe.ai; object-src 'none'; base-uri 'self'; form-action 'self';"
+  content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; style-src https://cdn.jsdelivr.net 'unsafe-inline'; img-src data:; font-src data: 'self'; connect-src 'self' https://api.typesafe.ai; object-src 'none'; base-uri 'self'; form-action 'self';"
 />
 <title>Jev Chess — TypeSafe move selector</title>
 <style>
@@ -94,6 +94,8 @@
   .sd-pad button:hover:not(:disabled) { border-color: var(--accent); background: var(--panel-2); }
   .sd-pad button:disabled { opacity: 0.25; cursor: not-allowed; }
   .sd-pad button.cancel { color: var(--bad); }
+  #moduleView { width: 100%; }
+  #moduleMount { width: 100%; }
   .seg button { min-width: 0; padding: 6px 8px; }
   .top-controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .tc-label { font-size: 12px; color: var(--muted); margin: 0; white-space: nowrap; }
@@ -295,6 +297,12 @@
         <select id="gameSelect" class="game-select" aria-label="Game">
           <option value="chess" selected>Chess</option>
           <option value="sudoku">Sudoku</option>
+          <option value="connect4" data-games>Connect Four</option>
+          <option value="othello" data-games>Othello</option>
+          <option value="uttt" data-games>Ultimate Tic-Tac-Toe</option>
+          <option value="hex" data-games>Hex</option>
+          <option value="dots" data-games>Dots &amp; Boxes</option>
+          <option value="battleship" data-games>Battleship</option>
         </select>
         <label class="tc-label" for="sideSelect">Play as</label>
         <div class="seg" id="sideSelect" role="tablist">
@@ -324,6 +332,10 @@
             <div id="sudokuBoard" class="sudoku-grid"></div>
           </div>
           <div id="sdPad" class="sd-pad" style="display:none"></div>
+        </div>
+        <div id="moduleView" style="display:none">
+          <div id="moduleMount"></div>
+          <div id="modulePad" class="sd-pad" style="display:none"></div>
         </div>
         <div class="board-status">
           <span class="status-dot" id="statusDot"></span>
@@ -422,6 +434,16 @@
     import { Chess } from "https://cdn.jsdelivr.net/npm/chess.js@1.4.0/dist/esm/chess.js";
     import "https://cdn.jsdelivr.net/npm/gchessboard@1.4.0/dist/index.es.js";
 
+    // Module games load lazily (dynamic import): the page works even if a
+    // module file is absent, and prod never loads them while the flag is off.
+    const MODULE_IDS = ["connect4", "othello", "uttt", "hex", "dots", "battleship"];
+    const GAME_MODULES = {};
+    async function loadGameModule(id) {
+      if (GAME_MODULES[id]) return GAME_MODULES[id];
+      GAME_MODULES[id] = (await import("./games/" + id + ".js")).default;
+      return GAME_MODULES[id];
+    }
+
     // Same-origin: Caddy proxies this path to the jev-chess proxy, which holds the key.
     const REL_ENDPOINT = "/v1/systemone";
     const DIRECT_ENDPOINT = "https://api.typesafe.ai/v1/systemone";
@@ -429,7 +451,7 @@
     // Per-environment feature flag. deploy.sh injects the value into the
     // served page: sudoku is ON for staging, OFF for prod, until it is
     // explicitly promoted. Do not hand-edit; the placeholder is replaced at deploy.
-    const FEATURES = { sudoku: __FEATURE_SUDOKU__ };
+    const FEATURES = { sudoku: __FEATURE_SUDOKU__, games: __FEATURE_GAMES__ };
     const MAX_OPTIONS = 255;
     const REQUEST_TIMEOUT_MS = 12000;
     const RETRY_DELAY_MS = 2000;
@@ -483,6 +505,9 @@
     const chessViewEl = $("chessView");
     const sudokuViewEl = $("sudokuView");
     const sudokuGrid = $("sudokuBoard");
+    const moduleViewEl = $("moduleView");
+    const moduleMountEl = $("moduleMount");
+    const modulePadEl = $("modulePad");
     const padEl = $("sdPad");
     const pbBlackWho = $("pbBlackWho");
     const historyEl = $("history");
@@ -529,14 +554,20 @@
       lastRespAt: 0,
       chosenSide: "black",
       pendingPromotion: null,
-      abortedForNewGame: false
+      abortedForNewGame: false,
+      mod: null,
+      modSnaps: []
     };
 
-    const aiTurn = () => state.gameId === "sudoku" ? state.sd.turn : state.game.turn();
-    const pliesMade = () => state.gameId === "sudoku" ? state.sd.hist.length : state.game.history().length;
-    const gameIsOver = () => state.gameId === "sudoku" ? !!state.sdOver : state.game.isGameOver();
+    const aiTurn = () => state.gameId === "sudoku" ? state.sd.turn : (state.gameId in GAME_MODULES ? state.mod.turn : state.game.turn());
+    const pliesMade = () => state.gameId === "sudoku" ? state.sd.hist.length : (state.gameId in GAME_MODULES ? state.modSnaps.length : state.game.history().length);
+    const gameIsOver = () => state.gameId === "sudoku" ? !!state.sdOver : (state.gameId in GAME_MODULES ? !!(state.mod && state.mod.over) : state.game.isGameOver());
     const livePly = () => pliesMade();
     const isLiveView = () => state.viewPly === livePly();
+    const isModuleGame = () => MODULE_IDS.includes(state.gameId);
+    const isSudoku = () => state.gameId === "sudoku";
+    const isChess = () => state.gameId === "chess";
+    const modTurn = () => (state.mod ? state.mod.turn : null);
 
     function setStatus(text, kind) {
       statusText.textContent = text;
@@ -575,6 +606,7 @@
 
     function updateInteractive() {
       if (state.gameId === "sudoku") { renderSudoku(); return; }
+      if (isModuleGame()) { modRender(); return; }
       if (interactionAllowed()) boardEl.setAttribute("interactive", "");
       else boardEl.removeAttribute("interactive");
       if (state.humanColor) boardEl.turn = state.humanColor;
@@ -587,7 +619,7 @@
       else if (state.humanColor === "w") canUndo = pl >= 1;
       else canUndo = pl >= 2; // as Black, undo only makes sense once we've moved
       undoBtn.disabled = !canUndo || state.isThinking;
-      flipBtn.disabled = state.gameId === "sudoku" || state.isThinking;
+      flipBtn.disabled = (state.gameId !== "chess") || state.isThinking;
       const canHint = !gameIsOver() && !state.isThinking && !state.pendingRetry && state.mode === "human" && aiTurn() === state.humanColor;
       hintBtn.disabled = !canHint;
     }
@@ -605,6 +637,7 @@
     function refreshLiveStatus() {
       updateUndoHintBtns();
       if (state.gameId === "sudoku") { sdRefreshStatus(); return; }
+      if (isModuleGame()) { modRefreshStatus(); return; }
       const g = state.game;
       if (g.isGameOver()) { setStatus(resultText(g), "bad"); return; }
       if (state.pendingRetry) { setStatus("AI move failed \u2014 see the AI decision panel and Retry.", "warn"); return; }
@@ -637,6 +670,7 @@
 
     function renderHistory() {
       if (state.gameId === "sudoku") { sdRenderHistory(); return; }
+      if (isModuleGame()) { modRenderHistory(); return; }
       const hist = state.game.history({ verbose: true });
       historyEl.textContent = "";
       if (hist.length === 0) {
@@ -683,6 +717,11 @@
       if (ply < 0) ply = 0;
       if (ply > livePly()) ply = livePly();
       state.viewPly = ply;
+      if (isModuleGame()) {
+        modRender(); renderHistory();
+        if (isLiveView()) refreshLiveStatus(); else setStatus("Reviewing move " + ply + " of " + livePly(), "dim");
+        return;
+      }
       if (state.gameId === "sudoku") {
         const sd = state.sd;
         if (isLiveView()) state.sdViewBoard = null;
@@ -709,7 +748,7 @@
 
     function goLive() {
       state.viewPly = livePly();
-      syncBoard(state.game.fen());
+      if (isModuleGame()) { modRender(); } else if (isSudoku()) { renderSudoku(); } else { syncBoard(state.game.fen()); }
       updateInteractive();
       renderHistory();
       refreshLiveStatus();
@@ -817,7 +856,9 @@
       const model = modelEl.value.trim() || DEFAULT_MODEL;
       const endpoint = state.connMode === "byok" ? DIRECT_ENDPOINT : REL_ENDPOINT;
       const isSd = state.gameId === "sudoku";
-      const fenAtRequest = isSd ? JSON.stringify(state.sd.board) : g.fen();
+      const isMod = isModuleGame();
+      const posSig = isSd ? JSON.stringify(state.sd.board) : (isMod ? JSON.stringify(state.mod) : g.fen());
+      const fenAtRequest = posSig;
       const serial = ++state.requestSerial;
 
       state.isThinking = true;
@@ -828,7 +869,7 @@
 
       let payload;
       try {
-        payload = isSd ? buildSdPayload() : buildPayload(g);
+        payload = isSd ? buildSdPayload() : (isMod ? buildModPayload() : buildPayload(g));
       } catch (err) {
         // e.g. invariant (too many legal moves) — surface, no position change.
         state.isThinking = false;
@@ -855,7 +896,7 @@
           const ra = Number(res.headers.get("retry-after"));
           const wait = (Number.isFinite(ra) && ra > 0) ? Math.min(ra, 15) * 1000 : RETRY_DELAY_MS;
           await new Promise((r) => setTimeout(r, wait));
-          if (serial === state.requestSerial && (isSd ? JSON.stringify(state.sd.board) : state.game.fen()) === fenAtRequest) {
+          if (serial === state.requestSerial && posSig === fenAtRequest) {
             res = await postJson(controller, key, endpoint, sendBody);
           }
         }
@@ -879,7 +920,7 @@
         }
 
         // Stale response: a reset / new game / position change owns the game now.
-        if (serial !== state.requestSerial || (isSd ? JSON.stringify(state.sd.board) : state.game.fen()) !== fenAtRequest) {
+        if (serial !== state.requestSerial || posSig !== fenAtRequest) {
           return;
         }
 
@@ -912,6 +953,10 @@
         const move = legalMap.get(choice);
         if (isSd) {
           sdApply({ r: move.r, c: move.c, d: move.d, san: move.san }, moverColor);
+        } else if (isMod) {
+          const mod = GAME_MODULES[state.gameId];
+          mod.applyMove(state.mod, move);
+          state.modSnaps.push({ state: JSON.parse(JSON.stringify(state.mod)), label: mod.moveLabel(move), side: null });
         } else {
           state.game.move({ from: move.from, to: move.to, promotion: move.promotion });
         }
@@ -934,7 +979,7 @@
 
         state.isThinking = false; // before status/interaction recomputes
         state.viewPly = livePly();
-        syncBoard(isSd ? "" : state.game.fen());
+        if (isMod) modRender(); else if (isSd) renderSudoku(); else syncBoard(state.game.fen());
         renderHistory();
         refreshLiveStatus();
         if (state.mode === "jevjev") scheduleJevChain();
@@ -1238,6 +1283,83 @@
       };
     }
 
+
+    // ============================ MODULE GAMES ============================
+    function modView() {
+      return { mount: moduleMountEl, pad: modulePadEl, interactive: modInteractive(), commitMove: (move) => modHumanCommit(move) };
+    }
+    function modInteractive() {
+      return (isModuleGame() && isLiveView() && state.mod && !state.mod.over &&
+        !state.isThinking && !state.pendingRetry && state.mode === "human" && modTurn() === state.humanColor);
+    }
+    function modRender() {
+      if (!isModuleGame() || !state.mod) return;
+      const mod = GAME_MODULES[state.gameId];
+      const snap = state.modSnaps[state.viewPly];
+      mod.render(modView(), snap ? snap.state : state.mod);
+    }
+    function modHumanCommit(move) {
+      if (!modInteractive()) return;
+      const mod = GAME_MODULES[state.gameId];
+      const mv = mod.legalMoves(state.mod).find((m) => m.key === move.key);
+      if (!mv) return;
+      mod.applyMove(state.mod, mv);
+      state.modSnaps.push({ state: JSON.parse(JSON.stringify(state.mod)), label: mod.moveLabel(mv), side: null });
+      state.viewPly = state.modSnaps.length;
+      modRender(); renderHistory(); updateInteractive(); refreshLiveStatus();
+      if (!gameIsOver() && (state.mode === "jevjev" || modTurn() === state.aiColor)) maybeAiMove();
+    }
+    function modRefreshStatus() {
+      if (state.mod && state.mod.over) { setStatus(state.mod.over, "bad"); return; }
+      if (state.pendingRetry) { setStatus("AI move failed \u2014 see the AI decision panel and Retry.", "warn"); return; }
+      if (state.isThinking) { setStatus("Jev is thinking\u2026", "thinking"); return; }
+      if (modTurn() === state.humanColor) setStatus("Your turn \u2014 " + (state.humanColor === "w" ? "White" : "Black"), "good");
+      else setStatus("Waiting for Jev", "dim");
+    }
+    function modRenderHistory() {
+      const snaps = state.modSnaps;
+      historyEl.textContent = "";
+      if (snaps.length === 0) {
+        const e = document.createElement("div"); e.className = "hist-empty"; e.textContent = "No moves yet.";
+        historyEl.appendChild(e);
+      } else {
+        for (let i = 0; i < snaps.length; i += 2) {
+          const row = document.createElement("div"); row.className = "hist-row";
+          const num = document.createElement("span"); num.className = "hist-num"; num.textContent = (i / 2 + 1) + ".";
+          row.appendChild(num);
+          const mk = (snap, ply) => { const b = document.createElement("button"); b.className = "ply" + (state.viewPly === ply ? " active" : ""); b.textContent = snap.label; b.title = "View after " + snap.label; b.addEventListener("click", () => viewPly(ply)); return b; };
+          row.appendChild(mk(snaps[i], i + 1));
+          row.appendChild(snaps[i + 1] ? mk(snaps[i + 1], i + 2) : document.createElement("span"));
+          historyEl.appendChild(row);
+        }
+      }
+      prevBtn.disabled = state.viewPly <= 0;
+      nextBtn.disabled = state.viewPly >= state.modSnaps.length;
+      liveBtn.disabled = isLiveView();
+      const active = historyEl.querySelector(".ply.active");
+      if (active) { const aTop = active.offsetTop, aBot = aTop + active.offsetHeight; if (aTop < historyEl.scrollTop) historyEl.scrollTop = aTop; else if (aBot > historyEl.scrollTop + historyEl.clientHeight) historyEl.scrollTop = aBot - historyEl.clientHeight; }
+    }
+    function modUndo() {
+      if (state.isThinking || state.activeAbortController) abortActiveRequest();
+      if (state.modSnaps.length === 0) return;
+      const back = state.mode === "jevjev" ? (state.modSnaps.length >= 2 ? 2 : 1) : (modTurn() === state.humanColor ? 2 : 1);
+      for (let i = 0; i < back && state.modSnaps.length > 0; i++) state.modSnaps.pop();
+      state.mod = state.modSnaps.length ? state.modSnaps[state.modSnaps.length - 1].state : GAME_MODULES[state.gameId].newGame();
+      state.viewPly = state.modSnaps.length;
+      state.pendingRetry = false; retryRow.style.display = "none"; retryBtn.textContent = "Retry AI Move";
+      clearAiDecision(); modRender(); renderHistory(); refreshLiveStatus();
+      if (!gameIsOver() && (state.mode === "jevjev" || modTurn() === state.aiColor)) maybeAiMove();
+    }
+    function buildModPayload() {
+      const mod = GAME_MODULES[state.gameId];
+      const legal = mod.legalMoves(state.mod);
+      if (legal.length > MAX_OPTIONS) throw { kind: "internal", detail: "More than " + MAX_OPTIONS + " legal moves (" + legal.length + "); refusing to truncate." };
+      if (legal.length === 0) throw { kind: "internal", detail: "No legal moves and game not over." };
+      const criteria = {};
+      for (const m of legal) criteria[m.key] = { label: m.label };
+      return { model: modelEl.value.trim() || DEFAULT_MODEL, state: mod.promptState(state.mod, modTurn()), questions: { move: { type: "choice", instructions: mod.promptInstructions(state.mod, modTurn()), criteria } }, _meta: { moves: legal, count: legal.length } };
+    }
+
     function abortActiveRequest() {
       if (state.activeAbortController) {
         state.abortedForNewGame = true;
@@ -1253,23 +1375,32 @@
       return Math.random() < 0.5 ? "w" : "b";
     }
 
-    function startNewGame() {
+    async function startNewGame() {
       abortActiveRequest();
       state.abortedForNewGame = false;
       state.gameId = gameSelect.value;
       if (state.gameId === "sudoku" && !FEATURES.sudoku) {
-        // Feature not enabled on this deployment: fall back to chess.
         state.gameId = "chess";
         gameSelect.value = "chess";
       }
-      chessViewEl.style.display = state.gameId === "chess" ? "" : "none";
-      sudokuViewEl.style.display = state.gameId === "sudoku" ? "" : "none";
-      if (state.gameId === "sudoku") {
+      chessViewEl.style.display = isChess() ? "" : "none";
+      sudokuViewEl.style.display = isSudoku() ? "" : "none";
+      moduleViewEl.style.display = isModuleGame() ? "" : "none";
+      if (isSudoku()) {
         const pz = sdNewPuzzle();
         state.sd = { board: pz, initialBoard: pz.slice(), turn: "w", hist: [] };
         state.sdOver = null;
         state.sdViewBoard = null;
         state.sdSelected = null;
+      }
+      if (isModuleGame() && !FEATURES.games) {
+        state.gameId = "chess";
+        gameSelect.value = "chess";
+      }
+      if (isModuleGame()) {
+        const mod = await loadGameModule(state.gameId);
+        state.mod = mod.newGame();
+        state.modSnaps = [];
       }
       state.game = new Chess();
       state.mode = state.chosenSide === "jevjev" ? "jevjev" : "human";
@@ -1424,6 +1555,7 @@
 
     undoBtn.addEventListener("click", () => {
       if (state.gameId === "sudoku") { sdUndo(); return; }
+      if (isModuleGame()) { modUndo(); return; }
       if (state.pendingPromotion) hidePromo();
       if (state.isThinking || state.activeAbortController) abortActiveRequest();
       const g = state.game;
@@ -1470,7 +1602,10 @@
       setStatus((ok ? "" : "Clipboard blocked \u2014 ") + label + (ok ? " copied." : ""), ok ? "good" : "warn");
       setTimeout(refreshLiveStatus, 1600);
     }
-    pgnBtn.addEventListener("click", () => copyText("Grid", state.gameId === "sudoku" ? sdGridText(false) : (state.game.pgn() || "(no moves)")));
+    pgnBtn.addEventListener("click", () => {
+      if (isModuleGame()) { copyText("Position", JSON.stringify(state.mod, null, 0)); return; }
+      copyText("Grid", isSudoku() ? sdGridText(false) : (state.game.pgn() || "(no moves)"));
+    });
     fenBtn.addEventListener("click", () => copyText(state.gameId === "sudoku" ? "Grid" : "FEN", state.gameId === "sudoku" ? sdGridText(true) : state.game.fen()));
     restartBtn.addEventListener("click", startNewGame);
     gameSelect.addEventListener("change", () => { startNewGame(); });
@@ -1515,7 +1650,10 @@
     function init() {
       if (!FEATURES.sudoku) {
         const opt = document.querySelector('#gameSelect option[value="sudoku"]');
-        if (opt) opt.remove(); // feature not enabled on this deployment
+        if (opt) opt.remove();
+      }
+      if (!FEATURES.games) {
+        document.querySelectorAll('#gameSelect option[data-games]').forEach((o) => o.remove());
       }
       boardEl.setAttribute("orientation", "white");
       updateInteractive();

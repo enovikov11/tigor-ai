@@ -18,9 +18,9 @@
 # graceful `reload` only when the Caddyfile content actually changed.
 #
 # Feature flags: rendered into the page at deploy time.
-#   prod:    sudoku=${PROD_SUDOKU:-false}
-#   staging: sudoku=${STAGING_SUDOKU:-true}
-# Promote a feature to prod: PROD_SUDOKU=true ./deploy.sh prod
+#   prod:    sudoku=${PROD_SUDOKU:-false}  games=${PROD_GAMES:-false}
+#   staging: sudoku=${STAGING_SUDOKU:-true}  games=${STAGING_GAMES:-true}
+# Promote a feature to prod: PROD_SUDOKU=true PROD_GAMES=true ./deploy.sh prod
 set -euo pipefail
 TARGET=${1:-all}
 VPS=root@jev-chess.tgr.rs
@@ -29,9 +29,18 @@ SRC=$(cd "$(dirname "$0")" && pwd)
 REV=$(git -C "$SRC" rev-parse --short HEAD 2>/dev/null || echo unknown)
 if git -C "$SRC" status --porcelain 2>/dev/null | grep -q .; then REV="${REV}-dirty"; fi
 
-render_page() { # $1=dest  $2=sudoku-flag(true|false)
+render_page() { # $1=dest  $2=sudoku-flag  $3=games-flag
   sed -e "s|<span id=\"rev\">—</span>|<span id=\"rev\">${REV}</span>|" \
-      -e "s/__FEATURE_SUDOKU__/${2}/" "$SRC/index.html" > "$1"
+      -e "s/__FEATURE_SUDOKU__/${2}/" \
+      -e "s/__FEATURE_GAMES__/${3}/" "$SRC/index.html" > "$1"
+  # When a feature is off for this env, strip its <option> from the served HTML
+  # too (init() also removes it at runtime as defense-in-depth).
+  if [ "$2" = "false" ]; then
+    sed -i '/<option value="sudoku">/d' "$1"
+  fi
+  if [ "$3" = "false" ]; then
+    sed -i '/data-games/d' "$1"
+  fi
 }
 
 BEFORE=$(ssh "$VPS" "sha256sum /opt/jev-chess/Caddyfile 2>/dev/null | cut -d' ' -f1 || echo none")
@@ -42,7 +51,7 @@ deploy_staging() {
   cp "$SRC/proxy.py" "$SRC/staging/proxy.py"
   cp "$SRC/Dockerfile" "$SRC/staging/Dockerfile"
   mkdir -p "$SRC/staging/web"
-  render_page "$SRC/staging/web/index.html" "${STAGING_SUDOKU:-true}"
+  render_page "$SRC/staging/web/index.html" "${STAGING_SUDOKU:-true}" "${STAGING_GAMES:-true}"
   rsync -az --delete \
     --exclude web --exclude proxy.py --exclude Dockerfile --exclude docker-compose.yml \
     "$SRC/staging/" "$VPS:/opt/jev-chess/staging/"   # Caddyfile reference copy
@@ -57,7 +66,7 @@ deploy_staging() {
 deploy_prod() {
   : "${I_UNDERSTAND_THIS_TOUCHES_PROD:?deploy.sh: refusing to touch prod. Set I_UNDERSTAND_THIS_TOUCHES_PROD=1 to proceed.}"
   mkdir -p "$SRC/web"
-  render_page "$SRC/web/index.html" "${PROD_SUDOKU:-false}"
+  render_page "$SRC/web/index.html" "${PROD_SUDOKU:-false}" "${PROD_GAMES:-false}"
   rsync -az --delete "$SRC/web/" "$VPS:/opt/jev-chess/web/"
   rsync -az "$SRC/proxy.py" "$SRC/Dockerfile" "$SRC/docker-compose.yml" \
     "$VPS:/opt/jev-chess/"
