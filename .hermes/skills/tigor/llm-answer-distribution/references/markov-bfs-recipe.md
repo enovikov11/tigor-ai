@@ -29,7 +29,7 @@ body = {
 
 Each call returns the top-N distribution over the next token given the prefix. With `logprobs: 500`: ~160 KB, ~2 s (GPU compute-bound — payload size barely matters), ~30–50 expansions/s at 8–16 concurrent in flight — the heap walk only needs the top-K children plus the stop token, and the residual mass `1 − p_stop − Σ p_kids` is booked as pruned. Full vocab is `logprobs: 200000` (199,307 non-zero entries, ~6 MB, ~2 s); use it only for arbitrary-token lookups. Choosing k: measure per-node coverage on real nodes — number branches are steep (top-30 ≈ 99.99%) and flat prose nodes carry the tail (top-300 ≈ 99.0%, top-500 ≈ 99.3%); 500 is the sweet spot, 300 the floor, 1000 diminishing. Concurrency: see the absorption loop below (perpetually-N-in-flight, not batched barriers).
 
-Stop token on this server: `<|im_end|>` (pipes) — build via `chr(60)+chr(124)+"im_end"+chr(124)+chr(62)`; verify by scanning the head distribution for 'im_end'.
+Stop token: resolve the exact text at boot via `logprob_token_ids: [248046]` on /v1/completions (min-logprob entry = the special token; the response REPLACES the top-K list with sampled token + requested id). On Qwen3.8-27B-FP8 the decoded text is the pipe-form special token — if a local expectation is needed at all, build it via `chr(60)+chr(124)+"im_end"+chr(124)+chr(62)` (transit mangles pipes) and compare to the server-returned text, failing fast on mismatch. Never hardcode it and never scan a head distribution for it (top-K membership is not guaranteed for rare tokens).
 
 ## Absorption algorithm (fast path — walk only until the first number)
 
@@ -86,6 +86,32 @@ def classify(text):
 ```
 
 Do NOT extract "the first in-range number" and call the chain valid — multiple numbers or an out-of-range number invalidate it. Use `re.findall(r"\d+")` for the count: a `\d{1,3}` + lookaround regex silently misses 4+ digit runs ("2017 is cool" → counted as no number instead of out-of-range). Fullwidth/superscript digits won't match `\d` under re.ASCII — match digits only against the ASCII token ids.
+
+## Reasoning-enabled walk (thinking on)
+
+When the target distribution includes the model's reasoning ("markov with reasoning enabled"), same design, three changes:
+
+1. **Template**: re-capture BASE_IDS with `enable_thinking=True` (Qwen3.8-27B-FP8 + number prompt: 63 IDs vs 23; the template is left OPEN at the think block, so the walk starts inside the reasoning). Re-capture per model/prompt — the no-think template is a different distribution, never reuse it. Boot self-check stays value-based against the server's own thinking-on chat root (dominant token 'We' ≈ 0.87 here).
+2. **THINK phase before the absorption**: digits in the reasoning NEVER count as the answer (the model re-cites the "10 and 30" range and candidate numbers in its own reasoning). State machine: phase 0 THINK — on a close-think-token child, transition into the v7 answer phase (LOOKAHEAD, fresh open_digits — digits inside the close token itself can close a run); stop (im_end) before the close → OUT_OF_RANGE; depth cap in THINK → LENGTH_EXCEEDED_NO_NUMBERS. Keep the close-think token INSIDE kids — the transition consumes it; separating it out without booking its mass leaks mass (conservation catches it, but late). The answer phase itself is v7 unchanged. The model's answer typically lands within a few tokens after the close token (it emits a newline or repeats the choice).
+3. **Depth/fetch**: think blocks run ~100–400 tokens → MAX_DEPTH 400 (100 truncates real reasoning); close/stop can sit at rank ~100–300 in mid-think nodes → FETCH_K 1000 (500 sufficed no-think).
+
+Boot resolution of the special tokens (deterministic, no top-K luck, no hardcoded special strings):
+
+```python
+def resolve_special(tid):
+    r = post("/v1/completions", {"model": MODEL, "prompt": BASE_IDS, "max_tokens": 1,
+                                 "logprobs": 1, "logprob_token_ids": [tid]})
+    items = r["choices"][0]["logprobs"]["top_logprobs"][0]
+    items = items.items() if isinstance(items, dict) else \
+            [(e["token"], e["logprob"]) for e in items]
+    return min(items, key=lambda x: x[1])[0]  # special token = the low-prob entry
+```
+
+`logprob_token_ids` REPLACES the top-K list (response = sampled token + the requested id, NOT a union). The sampled token's logp is ~−1, the special token's ~−20, so min-logprob picks it deterministically — one call per id. Sanity-check substrings ('im_end' in stop, 'think' in close) and that the two texts differ; on mismatch fail fast with the received texts in meta status (this check caught a hardcoded constant missing the pipes on first launch — the worker exited before spending one expansion).
+
+Cross-validation with thinking on: sample with `enable_thinking=True`, max_tokens ≥ 300, extract the answer from the CONTENT field ONLY (reasoning text is not the answer); with thinking off, concatenate reasoning+content as before.
+
+Wall-clock: the frontier starts ~100% and stays high far longer than no-think (the reasoning tree branches much wider — hundreds of prose tokens before the answer), and valid mass only appears once the close token carries real mass into the answer phase. Never report per-answer mass until that happens — early "top answers" are the shallowest thinking fragment, not the distribution. The coverage target (e.g. 99%) is the right stop rule; expect a longer wall-clock than the no-think run and record ALL chains (no mass floor) when the user asks for the chain capture.
 
 ## Cross-validation (mandatory)
 
