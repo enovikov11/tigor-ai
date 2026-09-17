@@ -1,0 +1,22 @@
+# STAGING — HTTP only, port 8080 (real DNS record -> this VPS; kept HTTP for simplicity).
+jev-chess-staging.tgr.rs:8080 {
+	encode gzip
+
+	# /v1/systemone -> proxy (same trust model as prod: X-Real-IP is set by
+	# Caddy from {remote_host} and only trusted from the gateway subnet).
+	@api path /v1/systemone
+	handle @api {
+		reverse_proxy 172.30.44.10:8443 {
+			header_up Host {host}
+			header_up X-Real-IP {remote_host}
+		}
+	}
+
+	handle {
+		@blocked path /.env /.env.example /.gitignore /proxy.py /Caddyfile /docker-compose.yml /Dockerfile /README.md /.env* /__pycache__* /*/__pycache__*
+		respond @blocked 404
+
+		root * /srv/jev-chess
+		file_server
+	}
+}

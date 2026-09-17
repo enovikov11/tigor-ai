@@ -1,16 +1,16 @@
-# jev-chess.tgr.rs — HTTP-01 ACME (DNS points here, ports 80/443 open).
-# Change the ACME contact email below if needed.
+# jev-chess.tgr.rs + jev-chess-staging.tgr.rs — single gateway, HTTP-01 ACME.
 {
 	email admin@tgr.rs
 }
 
+# ---------- PROD ----------
 jev-chess.tgr.rs {
 	encode gzip
 
-	# /v1/systemone -> proxy (key lives there; per-IP rate limited).
+	# /v1/systemone -> prod proxy (key lives there; per-IP rate limited).
 	# header_up X-Real-IP {remote_host} is set by Caddy from the true client
 	# address and OVERWRITES any client-supplied value — the proxy only
-	# trusts it from the gateway subnet, so per-IP limits cannot be spoofed.
+	# trusts it from its gateway subnet, so per-IP limits cannot be spoofed.
 	@api path /v1/systemone
 	handle @api {
 		reverse_proxy 172.30.42.10:8443 {
@@ -21,12 +21,31 @@ jev-chess.tgr.rs {
 
 	handle {
 		# Never serve these (the whole project dir is bound for the page).
-		# (respond must live inside this handle block: handle routes sort
-		# before top-level respond routes and would shadow them.)
 		@blocked path /.env /.env.example /.gitignore /proxy.py /Caddyfile /docker-compose.yml /Dockerfile /README.md /.env* /__pycache__* /*/__pycache__*
 		respond @blocked 404
 
 		root * /srv/jev-chess
+		file_server
+	}
+}
+
+# ---------- STAGING (same VPS, separate proxy, own page copy) ----------
+jev-chess-staging.tgr.rs {
+	encode gzip
+
+	@api path /v1/systemone
+	handle @api {
+		reverse_proxy 172.30.44.10:8443 {
+			header_up Host {host}
+			header_up X-Real-IP {remote_host}
+		}
+	}
+
+	handle {
+		@blocked path /.env /.env.example /.gitignore /proxy.py /Caddyfile /docker-compose.yml /Dockerfile /README.md /.env* /__pycache__* /*/__pycache__*
+		respond @blocked 404
+
+		root * /srv/jev-chess-staging
 		file_server
 	}
 }

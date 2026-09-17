@@ -1,0 +1,32 @@
+# STAGING proxy for jev-chess-staging.tgr.rs (same VPS as prod).
+#
+# HTTPS is served by the PROD caddy container (single gateway, owns
+# ports 80/443 and both Let's Encrypt certs). It reverse-proxies
+# /v1/systemone to this container over the shared jev-shared network.
+#
+# Client IP trust model (identical to prod): the proxy is only reachable
+# from jev-shared (172.30.44.0/24); it trusts X-Real-IP only from that
+# subnet, which Caddy populates from {remote_host}.
+services:
+  proxy:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: jev-staging-proxy
+    env_file:
+      - ../.env
+    environment:
+      PORT: "8443"
+      GATEWAY_SUBNET: 172.30.44.0/24
+    networks:
+      jev-shared:
+        ipv4_address: 172.30.44.10
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8443/healthz', timeout=5)"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+networks:
+  jev-shared:
+    external: true

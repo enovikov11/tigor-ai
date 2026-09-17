@@ -1,52 +1,56 @@
-# Self-contained stack for jev-chess.tgr.rs:
-#   caddy  — HTTPS + static page, proxies /v1/systemone to the proxy
-#   proxy  — holds the TypeSafe key (env), validates chess, rate-limits per IP
-# The proxy has NO published port: only caddy (same network) can reach it.
-# GATEWAY_SUBNET must match the ipam subnet below (spoof-proof X-Real-IP).
+# jev-chess.tgr.rs — single Caddy gateway for BOTH prod and staging domains.
+#   prod:    https://jev-chess.tgr.rs        -> this caddy -> jevnet   172.30.42.10:8443
+#   staging: https://jev-chess-staging.tgr.rs -> this caddy -> jev-shared 172.30.43.10:8443
+# Client IP trust model: each proxy trusts X-Real-IP only from its own
+# gateway subnet (set by Caddy from {remote_host}, overwriting any
+# client-supplied value). Proxies are unreachable from outside their networks.
 services:
   proxy:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: jev-chess-proxy
-    restart: unless-stopped
-    env_file: .env
+    env_file:
+      - .env
+    environment:
+      PORT: "8443"
+      GATEWAY_SUBNET: 172.30.42.0/24
     networks:
       jevnet:
         ipv4_address: 172.30.42.10
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:8443/healthz', timeout=3)"]
-      interval: 30s
+      test: ["CMD", "python3", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8443/healthz', timeout=5)"]
+      interval: 10s
       timeout: 5s
       retries: 3
 
   caddy:
     image: caddy:2
-    container_name: jev-chess-caddy
+    container_name: caddy
     restart: unless-stopped
     ports:
       - "80:80"
       - "443:443"
-      - "443:443/udp"
-    environment:
-      ACME_AGREE: "true"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - ./:/srv/jev-chess:ro
-      - caddy_data:/data
+      - ./web:/srv/jev-chess:ro
+      - ./staging/web:/srv/jev-chess-staging:ro
       - caddy_config:/config
-    networks:
-      jevnet:
-        ipv4_address: 172.30.42.5
+      - caddy_data:/data
     depends_on:
       - proxy
+    networks:
+      - jevnet
+      - jev-shared
 
 networks:
   jevnet:
-    driver: bridge
     ipam:
       config:
         - subnet: 172.30.42.0/24
-          gateway: 172.30.42.1
+  jev-shared:
+    external: true
 
 volumes:
-  caddy_data:
   caddy_config:
+  caddy_data:
