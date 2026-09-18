@@ -87,8 +87,13 @@ skills:
 approvals:
   timeout: 604800
 command_allowlist:
-  - script execution via heredoc
   - delete in root path
+  - docker restart/stop/kill (container lifecycle)
+  - docker compose restart/stop/kill/down (container lifecycle)
+  - overwrite system config
+  - shell execution via heredoc
+  - script execution via -e/-c flag
+  - script execution via heredoc
 security:
   redact_secrets: false
 code_execution:

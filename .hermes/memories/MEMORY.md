@@ -8,9 +8,7 @@ Hermes core code (gateway/telegram adapter/approvals) = high-risk for autonomous
 §
 Hermes .hermes config in tigor-ai/.hermes/ on GitHub (enovikov11/tigor-ai:main). Forgejo mirror at forgejo-push-for-preview.
 §
-Cron `script` parameter: must be a bare filename (e.g. `repo-audit.py`), auto-resolved relative to ~/./scripts/. Absolute or home-relative paths like ~/./scripts/repo-audit.py are rejected.
-§
-Clean service: minimal stdlib Python; distroless/alpine Dockerfile; named volumes; crash-fast on missing env.
+Cron `script` param: bare filename only (auto-resolves ~/./scripts/); any path form rejected.
 §
 User's YAML config files and .gitignore should not be touched unless explicitly asked. Memory notes are OK to edit freely.
 §
@@ -23,3 +21,5 @@ Model policy: NO auto-fallback — model choice must be explicit. OpenRouter pro
 HF model storage: /hdd + /ssd under /public/internet (huggingface.co[-temp]), readable from VM; audit: find -printf '%s\t%p\n' + size dedupe in Python.
 §
 ai/honcho worktree :8001: LLM=vllm Qwen3.8-27B-FP8, embed=honcho-embed TEI bge-small 384d :8002; dim change needs configure_embeddings.py.
+§
+Queued TypeSafe eval games: Blotto, Sokoban, Minesweeper, 2048, text adventure, roguelike. Deploy template: web/5-jev-chess-proxy.
