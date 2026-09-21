@@ -22,15 +22,15 @@
       "schedule_display": "0 3 * * *",
       "repeat": {
         "times": null,
-        "completed": 19
+        "completed": 20
       },
       "enabled": true,
       "state": "scheduled",
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-08-18T23:18:37.017944+00:00",
-      "next_run_at": "2026-09-21T03:00:00+00:00",
-      "last_run_at": "2026-09-19T03:00:14.308108+00:00",
+      "next_run_at": "2026-09-22T03:00:00+00:00",
+      "last_run_at": "2026-09-20T03:00:59.807180+00:00",
       "last_status": "delivery_failed",
       "last_error": null,
       "last_delivery_error": "configured thread_id 346555 for telegram:818630945 was not found; delivered without thread_id",
@@ -47,14 +47,14 @@
       ],
       "workdir": null,
       "fire_claim": {
-        "at": "2026-09-20T03:00:49.117600+00:00",
-        "by": "9ead7dc0b919:27116:d58ba559bf694294a8fac2d681f3d470"
+        "at": "2026-09-21T03:00:32.518992+00:00",
+        "by": "9ead7dc0b919:27116:d39325278ab14b0aabe3ea01451168b7"
       },
       "failure_streak": 0,
       "last_dispatch": {
-        "scheduled_at": "2026-09-20T03:00:00+00:00",
-        "dispatched_at": "2026-09-20T03:00:49.064971+00:00",
-        "lateness_seconds": 49.1,
+        "scheduled_at": "2026-09-21T03:00:00+00:00",
+        "dispatched_at": "2026-09-21T03:00:32.469532+00:00",
+        "lateness_seconds": 32.5,
         "kind": "on_time"
       }
     },
@@ -116,5 +116,5 @@
       "fire_claim": null
     }
   ],
-  "updated_at": "2026-09-20T03:00:49.118074+00:00"
+  "updated_at": "2026-09-21T03:00:32.519442+00:00"
 }
