@@ -4,18 +4,18 @@ Model: Qwen3.8-27B-FP8
 Inference Engine: vLLM v0.29.0  
 Host Port: 8000  
 Wall Time Run Budget: 30 minutes  
-Crown Jewel: minimalism, detetminism, readibility  
+Crown Jewel: minimalism, determinism, readibility  
 
-## How to use (instruction for a human)
+## Instruction for human (how to use)
 
 1) Download model
 2) Start engine
-3) Run tigorc via command below (intentionally kept as compact as possible)
+3) Run tigorc via command below
 
 ```bash
 podman run --rm -v "./README.md:/README.md:ro" nixos/nix sh -c '
     nix shell nixpkgs#jq -c sh -c '"'"'
-      jq -Rs "{seed:42,messages:[{role:\"user\",content:.}]}" /readme.md |
+      jq -Rs "{seed:42,messages:[{role:\"user\",content:.}]}" /README.md |
       curl -s http://host.containers.internal:8000/v1/chat/completions \
         -H "Content-Type: application/json" -d @- |
       jq -r ".choices[0].message.content" | bash
@@ -29,7 +29,7 @@ If you reading this, your human ran command above, this is harness zero. Your en
 
 1) Make harness one: output very defensive, compact and extensible bash hypervisor
 2) Write a prompt one: take some ideas from specification and implement them
-3) Iterate to two, three and repeat until done, respect time budget
+3) Iterate on harness and prompt, repeat until done, respect time budget and use watchdog/rollback pattern
 
 ## Compiler specification
 
