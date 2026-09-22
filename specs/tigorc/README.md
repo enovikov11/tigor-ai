@@ -1,9 +1,10 @@
 # tigorc - reproducible AI compiler (v0.1)
 
-Model: Qwen3.8-27B-FP8
-Inference engine: vLLM v0.29.0
-Host port: 8000
-Wall time budget for compilation: 30 minutes
+Model: Qwen3.8-27B-FP8  
+Inference Engine: vLLM v0.29.0  
+Host Port: 8000  
+Wall Time Run Budget: 30 minutes  
+Crown Jewel: minimalism, detetminism, readibility  
 
 ## How to use (instruction for a human)
 
