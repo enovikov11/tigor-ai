@@ -1,43 +1,92 @@
-# tigorc - reproducible AI compiler (v0.1)
+# tigorc - reproducible AI compiler (v0.3)
 
-Model: Qwen3.8-27B-FP8  
-Inference Engine: vLLM v0.29.0  
-Host Port: 8000  
-Wall Time Run Budget: 30 minutes  
-Crown Jewel: minimalism, determinism, readibility  
+Model: Qwen3.8-27B-FP8
+Engine: vLLM v0.29.0, host port 8000
+Budget: 30 minutes wall clock, 3 attempts
+Crown Jewel: minimalism, determinism, readability
 
-## Instruction for human (how to use)
+## Human: how to run
 
-1) Download model
-2) Start engine
-3) Run tigorc via command below
+Engine running on port 8000. Run from this directory only:
 
 ```bash
-podman run --rm -v "./README.md:/README.md:ro" nixos/nix sh -c '
-    nix shell nixpkgs#jq -c sh -c '"'"'
-      jq -Rs "{seed:42,messages:[{role:\"user\",content:.}]}" /README.md |
-      curl -s http://host.containers.internal:8000/v1/chat/completions \
-        -H "Content-Type: application/json" -d @- |
-      jq -r ".choices[0].message.content" | bash
-    '"'"'
+podman run --rm -w /work \
+  -e 'NIX_CONFIG=extra-experimental-features = nix-command flakes' \
+  -v "$(pwd):/work" \
+  nixos/nix nix shell nixpkgs#jq -c bash -c '
+    set -uo pipefail
+    ask() {  # prompt on stdin -> assistant content on stdout
+      jq -Rs "{\"seed\":42,\"messages\":[{\"role\":\"user\",\"content\":.}]}" |
+        curl -sm 1700 http://host.containers.internal:8000/v1/chat/completions \
+          -H "Content-Type: application/json" -d @- |
+        jq -r ".choices[0].message.content"
+    }
+    cp /work/README.md /work/prompt.md
+    for attempt in 1 2 3; do
+      echo "tigorc: attempt $attempt"
+      ask < /work/prompt.md > /work/harness.sh || exit 1
+      rm -rf bin src prompts projects tools tests logs tigorc
+      if bash /work/harness.sh 2>&1 | tee /work/run.log; then
+        echo "tigorc: OK after attempt $attempt"; exit 0
+      fi
+      {
+        cat /work/README.md
+        printf "\n# PREVIOUS ATTEMPT %s FAILED - fix the reported errors.\n\n" "$attempt"
+        cat /work/harness.sh
+        printf "\n# Output of that run\n\n"
+        tail -c 4000 /work/run.log
+      } > /work/prompt.md
+    done
+    echo "tigorc: failed after 3 attempts"; exit 1
   '
 ```
 
-## Instruction for AI (prompt zero)
+## Prompt zero (for the AI reading this)
 
-If you reading this, your human ran command above, this is harness zero. Your end goal is deterministic offline-friendly compiler that translates markdown to entire projects worth of code and can compile itself.
+Your human ran the command above. You are harness zero: from this single
+markdown file, produce a complete bash compiler that builds itself.
 
-1) Make harness one: output very defensive, compact and extensible bash hypervisor
-2) Write a prompt one: take some ideas from specification and implement them
-3) Iterate on harness and prompt, repeat until done, respect time budget and use watchdog/rollback pattern
+1. Output ONE complete bash script (harness one). No markdown fences,
+   no explanation.
+2. The script creates the tree below in the current directory, self-compiles,
+   self-tests, and exits non-zero on any failure.
+3. If your prompt contains a PREVIOUS ATTEMPT block, that script failed:
+   read the run output, fix those bugs, output the corrected full script.
 
-## Compiler specification
+## Contract (what harness one must produce)
 
-Tool calls support, looping with retries and timeouts, extensibility and simplicity. Need describe in details how tool calls need to be structured, and what compiler architecture need to be.
+Tree in the current directory:
 
-- We store not implementation, but compressed version of a code
-- Intelligence is a compression, we intentionally skip boilerplate
-- Prompt as a source allows you change underlying tech easily
-- It makes shuffling architectual frameworks and patterns delightful to explore
-- Codebase do not rots in a traditional sense, from compatibility layers
-- When spec is semantic enough, switching programming language not an issue
+```
+bin/ src/ prompts/ projects/ tools/ tests/ logs/
+tigorc            # entry script, mode 0755
+prompts/prompt_one.md
+```
+
+Rules:
+
+- First run must succeed from a FRESH root where none of the directories
+  above exist. A fresh root is not a broken state - never roll back a
+  first build.
+- Rollback: keep a snapshot of the last-good tree; on failed self-compile,
+  restore it and exit non-zero.
+- Watchdog: TIGORC_WALL_TIME wall-clock budget kills runaway runs; every
+  tool call has a timeout and TIGORC_RETRIES retries.
+- Tool calls: `tigorc tool <name> [args...]`; plugins are
+  `tools/<name>.sh` defining `tool_<name>`.
+- Deterministic: LC_ALL=C, TZ=UTC, seed 42, no network, no timestamps in
+  generated files, atomic writes only.
+- Self-test: `tigorc test` runs `tests/test.sh` and it must pass.
+
+## Specification
+
+Tool-call support, looping with retries and timeouts, extensibility, simplicity.
+Describe in detail how tool calls are structured and what the compiler
+architecture is - in prompt one.
+
+- We store not implementation, but a compressed version of code
+- Intelligence is compression; we deliberately skip boilerplate
+- Prompt as source lets you change the underlying tech easily
+- Shuffling architectural frameworks and patterns becomes easy to explore
+- Codebases do not rot the traditional way (no compatibility layers)
+- When a spec is semantic enough, switching languages is not an issue
