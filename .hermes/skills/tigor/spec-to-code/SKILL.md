@@ -154,4 +154,4 @@ if __name__ == "__main__":
 
 ## Session detail
 
-See `references/tigorc-session.md` for the tigorc implementation session notes.
+tigorc was rewritten 2026-09-22 (v0.3, commit e59803c on tigor-ai main) from the 438-line polyglot compiler to a **prompt-bootstrap**: specs/tigorc/README.md is now a 92-line prompt whose human-facing podman command sends the whole file to vLLM and pipes the LLM's bash harness output into `bash`. Key fixes found by piece-wise testing: `nix shell` in nixos/nix needs `NIX_CONFIG="extra-experimental-features = nix-command flakes"`; jq filter needs quoted keys `{"seed":42,...}`; Qwen3.8 is a thinking model (content=null on small max_tokens — budget for ~10min per 15-18KB generation). The README has a 3-attempt retry loop that feeds failed run output back into the next prompt; attempt 1 typically has ~1 bug (first run succeeded on attempt 2). Contract requires: fresh-root first-run success, snapshot rollback, watchdog/tool-timeout/retries, deterministic, `tigorc test` passing. Old 438-line version at git history `1fb6eae`. See `references/tigorc-session.md`.
