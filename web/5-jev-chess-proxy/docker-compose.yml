@@ -34,6 +34,7 @@ services:
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - ./web:/srv/jev-chess:ro
+      - ./long-chess:/srv/long-chess:ro
       - ./staging/web:/srv/jev-chess-staging:ro
       - caddy_config:/config
       - caddy_data:/data

@@ -78,10 +78,15 @@ deploy_prod() {
     cp -f "$SRC"/games/*.js "$SRC/web/games/" 2>/dev/null || true
   fi
   rsync -az --delete "$SRC/web/" "$VPS:/opt/jev-chess/web/"
+  # Long Chess (static): games/5-long-chess -> /opt/jev-chess/long-chess (caddy vol)
+  LC="$SRC/../../games/5-long-chess"
+  if [ -d "$LC" ]; then
+    rsync -az --delete "$LC/" "$VPS:/opt/jev-chess/long-chess/"
+  fi
   rsync -az "$SRC/proxy.py" "$SRC/Dockerfile" "$SRC/docker-compose.yml" \
     "$VPS:/opt/jev-chess/"
   rsync -az "$SRC/Caddyfile" "$VPS:/opt/jev-chess/Caddyfile"
-  ssh "$VPS" "cd /opt/jev-chess && docker compose up -d --no-deps --build proxy"
+  ssh "$VPS" "cd /opt/jev-chess && docker compose up -d --no-deps --build proxy && docker compose up -d caddy"
 }
 
 case "$TARGET" in

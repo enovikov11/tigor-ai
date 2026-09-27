@@ -25,6 +25,13 @@ jev-chess.tgr.rs {
 		}
 	}
 
+	# Long Chess — static, no backend.
+	handle /long-chess* {
+		uri strip_prefix /long-chess
+		root * /srv/long-chess
+		file_server
+	}
+
 	handle {
 		# Never serve these (the whole project dir is bound for the page).
 		@blocked path /.env /.env.example /.gitignore /proxy.py /Caddyfile /docker-compose.yml /Dockerfile /README.md /.env* /__pycache__* /*/__pycache__*
