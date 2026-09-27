@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Long Chess — 100 squares</title>
+<style>
+  :root {
+    --bg: #0e1116; --panel: #161b23; --line: #232b37;
+    --text: #d7dee8; --dim: #7d8898;
+    --sq-l: #3d4654; --sq-d: #262e3a;
+    --sel: #ffd75e; --hint: rgba(122, 215, 122, .55);
+    --cap-hint: rgba(235, 100, 90, .7);
+    --accent: #6fb3ff;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+    display: flex; flex-direction: column; align-items: center; padding: 18px 12px 40px;
+  }
+  h1 { font-size: 22px; margin: 6px 0 2px; font-weight: 650; letter-spacing: .3px; }
+  .sub { color: var(--dim); font-size: 13px; margin-bottom: 14px; text-align: center; }
+  .layout { display: flex; gap: 18px; flex-wrap: wrap; justify-content: center; }
+  .board-wrap { position: relative; }
+  .board {
+    display: grid; grid-template-columns: repeat(10, 1fr);
+    width: min(88vw, 560px); aspect-ratio: 1;
+    border: 2px solid var(--line); border-radius: 6px; overflow: hidden;
+    user-select: none;
+  }
+  .cell { display: flex; align-items: center; justify-content: center; position: relative; cursor: default; }
+  .cell.l { background: var(--sq-l); }
+  .cell.d { background: var(--sq-d); }
+  .cell .pc { font-size: min(6vw, 34px); line-height: 1; cursor: pointer; }
+  .cell.movable .pc { cursor: pointer; }
+  .cell.selected { box-shadow: inset 0 0 0 3px var(--sel); }
+  .cell.hint::after {
+    content: ""; position: absolute; width: 26%; height: 26%; border-radius: 50%;
+    background: var(--hint);
+  }
+  .cell.cap-hint::after {
+    content: ""; position: absolute; inset: 8%; border-radius: 50%;
+    border: 3px solid var(--cap-hint); background: transparent;
+  }
+  .coord { position: absolute; font-size: 9px; color: rgba(255,255,255,.35); pointer-events: none; }
+  .coord.file { bottom: 1px; right: 3px; }
+  .coord.rank { top: 1px; left: 3px; }
+  .side { white-space: nowrap; }
+  .side.w { color: #f2f5f9; text-shadow: 0 0 4px rgba(0,0,0,.8); }
+  .side.b { color: #1a1d23; }
+  .panel {
+    width: 300px; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 8px; padding: 14px; display: flex; flex-direction: column; gap: 12px;
+  }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  button, select {
+    background: #1d2430; color: var(--text); border: 1px solid var(--line);
+    border-radius: 6px; padding: 7px 12px; font: inherit; cursor: pointer;
+  }
+  button:hover { border-color: var(--accent); }
+  button:disabled { opacity: .4; cursor: default; }
+  .status { font-size: 15px; min-height: 22px; font-weight: 600; }
+  .status .w { color: #f2f5f9; } .status .b { color: #9aa4b2; }
+  .captured { min-height: 30px; font-size: 20px; letter-spacing: 3px; color: var(--dim); }
+  .captured .lbl { font-size: 11px; letter-spacing: 0; margin-right: 6px; color: var(--dim); }
+  .moves {
+    background: #10141b; border: 1px solid var(--line); border-radius: 6px;
+    padding: 8px 10px; height: 190px; overflow-y: auto; font-size: 13px;
+    font-variant-numeric: tabular-nums;
+  }
+  .moves .m { display: flex; gap: 6px; }
+  .moves .n { color: var(--dim); width: 30px; text-align: right; flex-shrink: 0; }
+  .moves .c { flex: 1; }
+  .moves .w-m { color: #f2f5f9; } .moves .b-m { color: #aab4c2; }
+  .rules { color: var(--dim); font-size: 12px; line-height: 1.5; }
+  .rules b { color: var(--text); }
+  label.opt { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--dim); cursor: pointer; }
+  .flash { animation: flash .5s; }
+  @keyframes flash { 0% { box-shadow: inset 0 0 0 4px var(--sel); } 100% { box-shadow: none; } }
+  .over-banner {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    background: rgba(10, 12, 16, .78); font-size: 26px; font-weight: 700; z-index: 5;
+    border-radius: 4px; flex-direction: column; gap: 14px;
+  }
+  .over-banner button { font-size: 15px; padding: 9px 18px; }
+</style>
+</head>
+<body>
+<h1>Long Chess</h1>
+<div class="sub">10&times;10 capture race &mdash; the side that runs out of moves loses. Capture a pawn to forge a crown.</div>
+<div class="layout">
+  <div class="board-wrap">
+    <div id="board" class="board"></div>
+    <div id="banner" class="over-banner" style="display:none"></div>
+  </div>
+  <div class="panel">
+    <div id="status" class="status"></div>
+    <div class="captured"><span class="lbl">your captures</span><span id="cap-yours"></span></div>
+    <div class="captured"><span class="lbl">engine captures</span><span id="cap-engine"></span></div>
+    <div class="row">
+      <button id="new">New game</button>
+      <button id="undo">Undo</button>
+    </div>
+    <div class="row">
+      <label class="opt">Side
+        <select id="player-side">
+          <option value="w" selected>White (top, moves first)</option>
+          <option value="b">Black (bottom)</option>
+        </select>
+      </label>
+    </div>
+    <div class="row">
+      <label class="opt">Difficulty
+        <select id="difficulty">
+          <option value="1">Easy</option>
+          <option value="3" selected>Normal</option>
+          <option value="5">Hard</option>
+        </select>
+      </label>
+      <label class="opt"><input type="checkbox" id="autoplay"> Autoplay</label>
+    </div>
+    <div id="log" class="moves"></div>
+    <div class="rules">
+      <b>Pawn</b> &mdash; 1 step forward, captures 1 diagonal forward, becomes a <b>Crown</b> on a capture.<br>
+      <b>Rook</b> &mdash; slides like a regular rook.<br>
+      <b>Crown</b> &mdash; rook + one step in any direction.
+    </div>
+  </div>
+</div>
+<script src="engine.js"></script>
+<script>
+(function () {
+  'use strict';
+  var E = window.LongChess;
+  var GLYPH = { P: '\u2587', R: '\u25A0', C: '\u265E' };
+  var state = null, snapshot = [];
+  var sel = null;
+  var playerSide = 'w', depth = 3, autoplay = false;
+  var thinking = false;
+
+  function $(id) { return document.getElementById(id); }
+  var boardEl = $('board');
+
+  function sideNow() { return state.turn; }
+  function isPlayerTurn() { return !autoplay && state.turn === playerSide && !E.gameOver(state).over; }
+  function gameOver() { return E.gameOver(state); }
+
+  function buildBoard() {
+    boardEl.innerHTML = '';
+    for (var i = 0; i < E.CELLS; i++) {
+      var r = i / E.SIZE | 0, c = i % E.SIZE;
+      var d = document.createElement('div');
+      d.className = 'cell ' + ((r + c) % 2 ? 'd' : 'l');
+      d.dataset.i = i;
+      if (r === 0) {
+        var rk = document.createElement('span');
+        rk.className = 'coord rank'; rk.textContent = E.SIZE - r;
+        d.appendChild(rk);
+      }
+      if (c === 0) {
+        var f = document.createElement('span');
+        f.className = 'coord file'; f.textContent = E.FILES[c];
+        d.appendChild(f);
+      }
+      boardEl.appendChild(d);
+    }
+    boardEl.addEventListener('click', onCellClick);
+  }
+
+  function render() {
+    var cells = boardEl.children;
+    var over = gameOver();
+    var hints = {};
+    if (sel) {
+      for (var i = 0; i < sel.targets.length; i++) {
+        var t = sel.targets[i];
+        hints[t.to] = t.capture ? 'cap-hint' : 'hint';
+      }
+    }
+    for (var j = 0; j < E.CELLS; j++) {
+      var el = cells[j];
+      var pc = state.board[j];
+      var rr = j / E.SIZE | 0, cc = j % E.SIZE;
+      el.className = 'cell ' + ((rr + cc) % 2 ? 'd' : 'l')
+        + (sel && sel.from === j ? ' selected' : '')
+        + (hints[j] ? ' ' + hints[j] : '')
+        + (!over.over && pc && pc.side === sideNow() ? ' movable' : '');
+      var old = el.querySelector('.pc');
+      if (old) el.removeChild(old);
+      if (pc) {
+        var s = document.createElement('span');
+        s.className = 'pc side ' + pc.side;
+        s.textContent = GLYPH[pc.p];
+        el.appendChild(s);
+      }
+    }
+    renderPanel(over);
+  }
+
+  function renderPanel(over) {
+    if (!over) over = gameOver();
+    var st = $('status');
+    if (over.over) {
+      var youWin = over.winner === playerSide && !autoplay;
+      st.innerHTML = autoplay
+        ? 'Game over — <span class="' + over.winner + '">win: ' + (over.winner === 'w' ? 'White' : 'Black') + '</span>'
+        : (youWin ? 'You win! The engine is blocked.' : 'You are blocked. The engine wins.');
+    } else if (thinking) {
+      st.innerHTML = 'Engine is thinking\u2026';
+    } else {
+      st.innerHTML = isPlayerTurn() ? 'Your move.' : 'Waiting for engine\u2026';
+    }
+    $('cap-yours').textContent = capsFor(playerSide).join(' ');
+    $('cap-engine').textContent = capsFor(E.other(playerSide)).join(' ');
+    renderLog();
+    if (over.over) {
+      var b = $('banner');
+      b.style.display = 'flex';
+      b.innerHTML = '<span>' + (autoplay ? '' : (over.winner === playerSide ? 'You win \uD83C\uDFC6' : 'You lose'))
+        + '</span><span class="sub" style="margin:0">' + (over.winner === 'w' ? 'White' : 'Black') + ' wins by blockade</span>'
+        + '<button id="again">Play again</button>';
+      $('again').addEventListener('click', newGame);
+    } else {
+      $('banner').style.display = 'none';
+    }
+  }
+
+  function capsFor(side) {
+    var out = [];
+    for (var i = 0; i < state.history.length; i++) {
+      var h = state.history[i];
+      if (h.side === side && h.captured) out.push(GLYPH[h.captured]);
+    }
+    return out;
+  }
+
+  function renderLog() {
+    var log = $('log');
+    log.innerHTML = '';
+    for (var i = 0; i < state.history.length; i++) {
+      var h = state.history[i];
+      var d = document.createElement('div');
+      d.className = 'm ' + (h.side === 'w' ? 'w-m' : 'b-m');
+      d.innerHTML = '<span class="n">' + (i + 1) + '.</span><span class="c">'
+        + h.piece + ' ' + E.sq(h.from) + (h.captured ? '\u00d7' : '\u2013') + E.sq(h.to) + '</span>';
+      log.appendChild(d);
+    }
+    log.scrollTop = log.scrollHeight;
+  }
+
+  function onCellClick(ev) {
+    if (!isPlayerTurn()) return;
+    var cell = ev.target.closest('.cell');
+    if (!cell) return;
+    var i = +cell.dataset.i;
+    if (sel && sel.from === i) { sel = null; render(); return; }
+    if (sel) {
+      for (var k = 0; k < sel.targets.length; k++) {
+        if (sel.targets[k].to === i) { doMove(sel.from, i, sel.targets[k]); return; }
+      }
+    }
+    var pc = state.board[i];
+    if (pc && pc.side === sideNow()) {
+      var mv = E.legalMoves(state, sideNow()).filter(function (m) { return m.from === i; });
+      if (mv.length) {
+        sel = { from: i, targets: mv.map(function (m) { return { to: m.to, capture: m.capture, promote: m.promote }; }) };
+        render();
+        return;
+      }
+    }
+    sel = null; render();
+  }
+
+  function doMove(from, to, target) {
+    var mv = { from: from, to: to, capture: target.capture, promote: target.promote };
+    snapshot.push(E.cloneState(state));
+    state = E.applyMove(state, mv);
+    sel = null;
+    var cell = boardEl.children[to];
+    cell.classList.remove('flash'); void cell.offsetWidth; cell.classList.add('flash');
+    render();
+    if (!gameOver().over && !isPlayerTurn()) {
+      thinking = true; render();
+      setTimeout(engineMove, 60);
+    }
+  }
+
+  function engineMove() {
+    var mv = E.bestMove(state, depth);
+    thinking = false;
+    if (!mv) { render(); return; }
+    snapshot.push(E.cloneState(state));
+    state = E.applyMove(state, mv);
+    render();
+    if (!gameOver().over && autoplay) {
+      thinking = true; render();
+      setTimeout(engineMove, 120);
+    }
+  }
+
+  function newGame() {
+    state = E.newGame();
+    snapshot = [];
+    sel = null; thinking = false;
+    playerSide = $('player-side').value;
+    depth = +$('difficulty').value;
+    autoplay = $('autoplay').checked;
+    $('banner').style.display = 'none';
+    render();
+    if (!gameOver().over && !isPlayerTurn()) {
+      thinking = true; render();
+      setTimeout(engineMove, 350);
+    }
+  }
+
+  $('new').addEventListener('click', newGame);
+  $('undo').addEventListener('click', function () {
+    if (thinking || !snapshot.length) return;
+    state = snapshot.pop();
+    if (!autoplay && snapshot.length && state.turn === playerSide) state = snapshot.pop();
+    sel = null;
+    $('banner').style.display = 'none';
+    render();
+  });
+
+  buildBoard();
+  newGame();
+})();
+</script>
+</body>
+</html>
