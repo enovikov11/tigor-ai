@@ -24,6 +24,14 @@ I_UNDERSTAND_THIS_TOUCHES_PROD=1 bash deploy.sh prod   # ONLY with user authoriz
 - Staging and prod paths must stay physically separated (prior incident: a "staging" rsync wrote the prod bind-mounted web dir and silently changed prod). Never reintroduce shared target dirs or env-ungated syncs.
 - Prod deploys must be non-disruptive (recreate only the staging/prod proxy container for that env; never take shared Caddy down).
 
+## Static path under an existing domain (no proxy)
+Used when the user wants a browser-only project on the jev-chess VPS/domain without TypeSafe or a backend (e.g. long-chess → `https://jev-chess.tgr.rs/long-chess/`):
+1. Caddyfile: add `handle /<name>* { uri strip_prefix /<name>; root * /srv/<name>; file_server }` inside the prod site, BEFORE the default `handle`.
+2. compose: add the caddy volume `./<name>:/srv/<name>:ro`.
+3. Deploy by hand: rsync static dir → `/opt/jev-chess/<name>/`, rsync Caddyfile + docker-compose.yml, then `docker compose up -d caddy` — **recreate, not reload**: reload applies config but never new volume mounts.
+4. **Do NOT run `deploy.sh prod` for a static-only change** — it re-renders `web/index.html` with default flags (`PROD_SUDOKU`/`PROD_GAMES` default false) and silently resets prod feature state.
+5. Verify: `curl -s https://jev-chess.tgr.rs/<name>/` 200 + each referenced asset 200.
+
 ## Proxy contract
 - `POST /v1/systemone` → upstream `https://api.typesafe.ai/v1/systemone`, key injected server-side. Body: `{model, state:{game, ...}, questions:{move:{type:"choice", instructions, criteria:{<key>:{label}}}}}`; answer is `answers.move.choice` = a criterion key (chess: SAN/LAN moves; modules: game keys). Send ALL legal moves as criteria; max 255 (assert in app).
 - Limits (in-memory sliding window, per IP): 1 rps / 1000 h / 5000 d. `X-Real-IP` trusted only from the gateway subnet (spoof-proof).
@@ -45,3 +53,5 @@ I_UNDERSTAND_THIS_TOUCHES_PROD=1 bash deploy.sh prod   # ONLY with user authoriz
 
 ## Games status
 Implemented + unit-tested: connect4, othello, uttt, hex, dots, battleship (battleship: hidden-info state — each side only sees its own fleet + shot results; placement supports `rand` key). Further games come from the queued TypeSafe eval list in memory.
+
+Static (NOT module contract, no proxy — served at `/long-chess/`): long-chess in `games/5-long-chess/` — 10×10 capture race, 10 rooks + 10 pawns per side, pawn capture promotes to crown (rook + 1 step any dir), blockade = loss, local negamax (depths 1/3/5; depth 6 ≈ 3s mid-game, too slow). UMD engine.js, Node headless tests.
